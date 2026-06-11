@@ -236,6 +236,9 @@
   .got.g5{background:rgba(230,184,76,.16);color:var(--gold)}
   .got.g2{background:var(--panel-2);color:var(--muted)}
   .got.g0{background:rgba(229,72,77,.12);color:#d98a8c}
+  .got.glive{background:rgba(255,77,85,.10);color:#FF9BA0;border:1px dashed rgba(255,77,85,.5)}
+  .pts .pend.inplay{color:var(--live);display:inline-flex;align-items:center;gap:5px}
+  .pts .pend.inplay .ldot{width:6px;height:6px;border-radius:50%;background:var(--live);display:inline-block;box-shadow:0 0 0 0 rgba(255,77,85,.55);animation:pulse 1.6s infinite}
   .pbonus{display:flex;gap:10px;padding:13px 16px;flex-wrap:wrap;border-bottom:1px solid var(--line);background:rgba(0,0,0,.12)}
   .pbonus .b{flex:1;min-width:140px;background:var(--panel-2);border:1px solid var(--line);border-radius:10px;padding:10px 12px}
   .pbonus .b .k{font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--faint)}
@@ -990,12 +993,18 @@ window.LEAGUE_DATA = {
     const leaders = SC.filter(s=>(s.goals||0)===topGoals && topGoals>0);
 
     return (D.players||[]).map(pl=>{
-      let mp=0, exact=0, one=0, ronly=0, played=0;
+      let mp=0, exact=0, one=0, ronly=0, played=0, liveMp=0, liveCount=0;
       D.fixtures.forEach((f,i)=>{
         const res = results[f.id];
-        if(!res || !res.finished) return;
+        if(!res || !(res.finished || res.live)) return;
         const pts = matchPoints((pl.preds||[])[i], res);
         if(pts===null) return;
+        if(res.live){
+          // In-play: score the CURRENT scoreline as if it were the final.
+          // These points move with every goal and lock in at full time.
+          liveCount++; liveMp += pts;
+          return;
+        }
         played++;
         if(pts===PTS.exact) exact++;
         else if(pts===PTS.resultOne) one++;
@@ -1014,13 +1023,13 @@ window.LEAGUE_DATA = {
       const bootLeading = !D.goldenBoot && pl.topScorer && leaders.some(s=>nameMatch(pl.topScorer,s.player));
       const bootInTable = !D.goldenBoot && pl.topScorer && SC.some(s=>nameMatch(pl.topScorer,s.player));
 
-      let total = mp;
+      let total = mp + liveMp;
       if(winnerWon) total += PTS.winner;
       if(bootWon) total += PTS.topScorer;
 
       return {
         name:pl.name, preds:pl.preds||[], topScorer:pl.topScorer, winner:pl.winner,
-        mp, exact, one, ronly, played, total,
+        mp, exact, one, ronly, played, total, liveMp, liveCount,
         winnerWon, winnerAlive, winnerEliminated:!!winnerEliminated,
         bootWon, bootLeading, bootInTable
       };
@@ -1237,7 +1246,7 @@ window.LEAGUE_DATA = {
       const p1 = Math.round(pot*C.prizeSplit[0]), p2 = Math.round(pot*C.prizeSplit[1]);
       prizes = [p1, p2, Math.max(0, pot-p1-p2)];   // 3rd absorbs rounding so the sum is exactly the pot
     }
-    let html = `<h2 class="section">Scoreboard</h2><p class="section-note">Tap a row for the points breakdown. ${PTS.exact} exact · ${PTS.resultOne} result + a score · ${PTS.resultOnly} result · ${PTS.winner} winner · ${PTS.topScorer} top scorer.</p><div class="panel">`;
+    let html = `<h2 class="section">Scoreboard</h2><p class="section-note">Tap a row for the points breakdown. ${PTS.exact} exact · ${PTS.resultOne} result + a score · ${PTS.resultOnly} result · ${PTS.winner} winner · ${PTS.topScorer} top scorer. Live matches count at the current score — the table moves with every goal.</p><div class="panel">`;
     if(!S.length){ html += `<div class="empty">No entrants yet. Add your mates in the data block (search for <code>players:</code>).</div></div>`; view.innerHTML=html; return; }
     if(prizes.length===3){
       html += `<div class="pot"><div class="pl">Prize pot <span>£${pot}</span></div><div class="br">${n} × £${C.buyIn}&nbsp; ·&nbsp; £${prizes[0]} / £${prizes[1]} / £${prizes[2]}</div></div>`;
@@ -1271,6 +1280,7 @@ window.LEAGUE_DATA = {
           <div class="big">${p.total}</div>
           <div class="lbl">points</div>
           ${paid ? `<div class="prize m${rank}">£${prizes[rank-1]}${ranks.filter(r=>r===rank).length>1?" (tie)":""}</div>` : ``}
+          ${p.liveCount?`<div class="pend inplay"><span class="ldot"></span>+${p.liveMp} in play</div>`:``}
           ${potential?`<div class="pend">+${potential} live</div>`:``}
         </div>
         <div class="breakdown">
@@ -1280,6 +1290,7 @@ window.LEAGUE_DATA = {
             <div class="bd-cell"><div class="v">${p.ronly}</div><div class="k">Result ×${PTS.resultOnly}</div></div>
           </div>
           <div class="bd-line">Match points: <b>${p.mp}</b> from ${p.played} finished matches.</div>
+          ${p.liveCount?`<div class="bd-line">In play: <b style="color:var(--live)">+${p.liveMp}</b> from ${p.liveCount} live ${p.liveCount===1?"match":"matches"} at the current score — moves with every goal, locks at full time.</div>`:``}
           <div class="bd-line">Top scorer pick: <b>${esc(p.topScorer||"—")}</b>${p.bootWon?` — won (+${PTS.topScorer})`:p.bootLeading?` — currently leading`:p.bootInTable?` — on the scoresheet`:``}.</div>
           <div class="bd-line">Winner pick: <b>${esc(p.winner||"—")}</b>${p.winnerWon?` — champions (+${PTS.winner})`:p.winnerEliminated?` — eliminated`:``}.</div>
         </div>
@@ -1424,6 +1435,9 @@ window.LEAGUE_DATA = {
         const pt=matchPoints(guess,r);
         const cls= pt===PTS.exact?"g10":pt===PTS.resultOne?"g5":pt===PTS.resultOnly?"g2":"g0";
         got=`<span class="got ${cls}">+${pt}</span>`;
+      } else if(r&&r.live&&parseScore(guess)){
+        const pt=matchPoints(guess,r);
+        got=`<span class="got glive">+${pt} live</span>`;
       }
       html += `
       <div class="pr">
