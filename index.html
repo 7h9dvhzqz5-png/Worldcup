@@ -237,6 +237,7 @@
   .got.g2{background:var(--panel-2);color:var(--muted)}
   .got.g0{background:rgba(229,72,77,.12);color:#d98a8c}
   .got.glive{background:rgba(255,77,85,.10);color:#FF9BA0;border:1px dashed rgba(255,77,85,.5)}
+  .bd-cell .lvadd{color:var(--live);font-size:11px;font-weight:700;margin-left:3px;vertical-align:2px}
   .pts .pend.inplay{color:var(--live);display:inline-flex;align-items:center;gap:5px}
   .pts .pend.inplay .ldot{width:6px;height:6px;border-radius:50%;background:var(--live);display:inline-block;box-shadow:0 0 0 0 rgba(255,77,85,.55);animation:pulse 1.6s infinite}
   .pbonus{display:flex;gap:10px;padding:13px 16px;flex-wrap:wrap;border-bottom:1px solid var(--line);background:rgba(0,0,0,.12)}
@@ -994,6 +995,7 @@ window.LEAGUE_DATA = {
 
     return (D.players||[]).map(pl=>{
       let mp=0, exact=0, one=0, ronly=0, played=0, liveMp=0, liveCount=0;
+      let liveExact=0, liveOne=0, liveRonly=0;
       D.fixtures.forEach((f,i)=>{
         const res = results[f.id];
         if(!res || !(res.finished || res.live)) return;
@@ -1003,6 +1005,9 @@ window.LEAGUE_DATA = {
           // In-play: score the CURRENT scoreline as if it were the final.
           // These points move with every goal and lock in at full time.
           liveCount++; liveMp += pts;
+          if(pts===PTS.exact) liveExact++;
+          else if(pts===PTS.resultOne) liveOne++;
+          else if(pts===PTS.resultOnly) liveRonly++;
           return;
         }
         played++;
@@ -1029,7 +1034,7 @@ window.LEAGUE_DATA = {
 
       return {
         name:pl.name, preds:pl.preds||[], topScorer:pl.topScorer, winner:pl.winner,
-        mp, exact, one, ronly, played, total, liveMp, liveCount,
+        mp, exact, one, ronly, played, total, liveMp, liveCount, liveExact, liveOne, liveRonly,
         winnerWon, winnerAlive, winnerEliminated:!!winnerEliminated,
         bootWon, bootLeading, bootInTable
       };
@@ -1285,9 +1290,9 @@ window.LEAGUE_DATA = {
         </div>
         <div class="breakdown">
           <div class="bd-grid">
-            <div class="bd-cell"><div class="v" style="color:var(--pos)">${p.exact}</div><div class="k">Exact ×${PTS.exact}</div></div>
-            <div class="bd-cell"><div class="v" style="color:var(--gold)">${p.one}</div><div class="k">+1 score ×${PTS.resultOne}</div></div>
-            <div class="bd-cell"><div class="v">${p.ronly}</div><div class="k">Result ×${PTS.resultOnly}</div></div>
+            <div class="bd-cell"><div class="v" style="color:var(--pos)">${p.exact}${p.liveExact?`<span class="lvadd">+${p.liveExact}</span>`:``}</div><div class="k">Exact ×${PTS.exact}</div></div>
+            <div class="bd-cell"><div class="v" style="color:var(--gold)">${p.one}${p.liveOne?`<span class="lvadd">+${p.liveOne}</span>`:``}</div><div class="k">+1 score ×${PTS.resultOne}</div></div>
+            <div class="bd-cell"><div class="v">${p.ronly}${p.liveRonly?`<span class="lvadd">+${p.liveRonly}</span>`:``}</div><div class="k">Result ×${PTS.resultOnly}</div></div>
           </div>
           <div class="bd-line">Match points: <b>${p.mp}</b> from ${p.played} finished matches.</div>
           ${p.liveCount?`<div class="bd-line">In play: <b style="color:var(--live)">+${p.liveMp}</b> from ${p.liveCount} live ${p.liveCount===1?"match":"matches"} at the current score — moves with every goal, locks at full time.</div>`:``}
