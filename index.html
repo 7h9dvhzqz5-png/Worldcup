@@ -1746,7 +1746,7 @@ window.LEAGUE_DATA = {
     const results = buildResults();
     const today = new Date().toISOString().slice(0,10);
     const segs = [["all","All"],["live","Live"],["ft","Finished"],["up","To come"]];
-    let html = `<h2 class="section">Fixtures &amp; Results</h2><p class="section-note">All 72 group matches. Tap a match to see everyone's prediction. Results fill in at full time.</p>
+    let html = `<h2 class="section">Fixtures &amp; Results</h2><p class="section-note">All 72 group matches in the order they're played. Tap a match to see everyone's prediction. Results fill in at full time.</p>
       <div class="panel"><div class="seg">${segs.map(([k,l])=>`<button data-seg="${k}" class="${fixtureFilter===k?'on':''}">${l}</button>`).join("")}</div>`;
 
     const fxRow = (f,i,r)=>{
@@ -1771,13 +1771,25 @@ window.LEAGUE_DATA = {
       liveList.forEach(({f,i,r})=> html += fxRow(f,i,r));
     }
 
-    let shown=0, curGroup="";
-    D.fixtures.forEach((f,i)=>{
+    // order the rest by kickoff date (match-day headers); fall back to group order until the feed loads
+    const dateOf = f => {
+      const e = api.byPair[teamKey(f.home)+"|"+teamKey(f.away)] || api.byPair[teamKey(f.away)+"|"+teamKey(f.home)];
+      return (e && e.date) || "";
+    };
+    const ordered = D.fixtures.map((f,i)=>({f,i,date:dateOf(f)}));
+    const anyDates = ordered.some(o=>o.date);
+    if(anyDates){
+      ordered.sort((a,b)=> (a.date&&b.date) ? (a.date<b.date?-1:a.date>b.date?1:a.i-b.i)
+                         : a.date ? -1 : (b.date ? 1 : a.i-b.i));
+    }
+    let shown=0, curHead="";
+    ordered.forEach(({f,i,date})=>{
       const r=results[f.id]; const fin=r&&r.finished, live=r&&r.live;
       if(fixtureFilter==="live") return;                 // live handled in the top section
       if(fixtureFilter==="ft" && !fin) return;
       if(fixtureFilter==="up" && (fin||live)) return;
-      if(f.group!==curGroup){ curGroup=f.group; html+=`<div class="grp-h">Group ${f.group}</div>`; }
+      const head = anyDates ? (date?matchDayLabel(date):"Date to be confirmed") : ("Group "+f.group);
+      if(head!==curHead){ curHead=head; html+=`<div class="grp-h">${head}</div>`; }
       html += fxRow(f,i,r);
       shown++;
     });
