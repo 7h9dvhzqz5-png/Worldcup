@@ -1824,16 +1824,28 @@ window.LEAGUE_DATA = {
     if(!players.length){ view.innerHTML=`<h2 class="section">Predictions</h2><div class="panel"><div class="empty">No entrants yet.</div></div>`; return; }
     if(selectedPlayer>=players.length) selectedPlayer=0;
     const p = players[selectedPlayer];
-    let html = `<h2 class="section">Predictions</h2><p class="section-note">Every pick, with points earned so far.</p>
+    let html = `<h2 class="section">Predictions</h2><p class="section-note">Every pick in the order the games are played, with points earned so far.</p>
       <div class="panel">
         <div class="selrow"><select id="playerSel">${players.map((pp,i)=>`<option value="${i}"${i===selectedPlayer?' selected':''}>${esc(pp.name)}</option>`).join("")}</select></div>
         <div class="pbonus">
           <div class="b"><div class="k">Top scorer pick</div><div class="vv">${esc(p.topScorer||"—")}</div></div>
           <div class="b"><div class="k">Winner pick</div><div class="vv">${p.winner?fteam(p.winner,true):"—"}</div></div>
         </div>`;
-    let curGroup="";
-    D.fixtures.forEach((f,i)=>{
-      if(f.group!==curGroup){curGroup=f.group;html+=`<div class="grp-h">Group ${f.group}</div>`;}
+    // order by kickoff (from the live feed); fall back to group order until the feed loads
+    const dateOf = f => {
+      const e = api.byPair[teamKey(f.home)+"|"+teamKey(f.away)] || api.byPair[teamKey(f.away)+"|"+teamKey(f.home)];
+      return (e && e.date) || "";
+    };
+    const ordered = D.fixtures.map((f,i)=>({f,i,date:dateOf(f)}));
+    const anyDates = ordered.some(o=>o.date);
+    if(anyDates){
+      ordered.sort((a,b)=> (a.date&&b.date) ? (a.date<b.date?-1:a.date>b.date?1:a.i-b.i)
+                         : a.date ? -1 : (b.date ? 1 : a.i-b.i));
+    }
+    let curHead="";
+    ordered.forEach(({f,i,date})=>{
+      const head = anyDates ? (date?matchDayLabel(date):"Date to be confirmed") : ("Group "+f.group);
+      if(head!==curHead){ curHead=head; html+=`<div class="grp-h">${head}</div>`; }
       const guess=(p.preds||[])[i]||"";
       const r=results[f.id];
       let got="";
@@ -1862,6 +1874,16 @@ window.LEAGUE_DATA = {
   }
 
   function esc(s){return (s==null?"":String(s)).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));}
+
+  // "2026-06-11" -> "Thursday 11 June" (UTC-safe, no timezone drift)
+  function matchDayLabel(ds){
+    const [y,m,d] = String(ds||"").split("-").map(Number);
+    if(!y||!m||!d) return "Date to be confirmed";
+    const dt = new Date(Date.UTC(y, m-1, d));
+    const days = ["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"];
+    const mons = ["January","February","March","April","May","June","July","August","September","October","November","December"];
+    return `${days[dt.getUTCDay()]} ${d} ${mons[m-1]}`;
+  }
 
   function renderActive(){
     if(activeTab==="leaderboard") renderLeaderboard();
