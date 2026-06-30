@@ -174,6 +174,7 @@
   .lb-row.isout{opacity:.74}
   .lb-row.isout.me{opacity:1}
   .bd-line.out-line{color:#d98a8c}
+  .who .meta .chip.best{color:#cfe0ff;border-color:rgba(61,123,255,.4);background:rgba(61,123,255,.08)}
   /* prize pot + podium markers */
   .pot{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:12px 14px 12px 16px;border-bottom:1px solid var(--line);background:linear-gradient(90deg, rgba(230,184,76,.07), transparent);position:relative}
   .pot::before{content:"";position:absolute;left:0;top:0;bottom:0;width:3px;background:linear-gradient(180deg,var(--host-r) 0 33%,var(--host-g) 33% 66%,var(--host-b) 66% 100%)}
@@ -1504,21 +1505,51 @@ window.LEAGUE_DATA = {
     const leaderTotal = S[0].total;
     const prizeLineTotal = S[2] ? S[2].total : null;
 
-    // ---- mathematical elimination from a top-3 (prize) finish ----
-    // A player's CEILING = banked points + 10 for every remaining group game + any
-    // bonus they could still win. Bonuses are NOT shared — each correct picker gets
-    // the full 40 (winner) / 60 (boot) — so each ceiling includes that player's own
-    // potential bonuses. Their FLOOR = banked points (can't drop). A player is OUT
-    // once at least 3 others' floors already exceed their ceiling.
+    // ---- best achievable finish & prize contention (tie-breaks included) ----
     const remainingGames = gTotal - gFin;
     const bankedOf = q => q.total - (q.liveMp||0);
-    const bonusLeftOf = q => (D.goldenBoot || q.bootEliminated ? 0 : (q.topScorer ? PTS.topScorer : 0))
-                           + (D.champion ? 0 : ((q.winner && !q.winnerEliminated) ? PTS.winner : 0));
-    const prizeOut = S.map(p=>{
-      const cap = bankedOf(p) + remainingGames*PTS.exact + bonusLeftOf(p);
-      let above = 0; for(const q of S){ if(q!==p && bankedOf(q) > cap) above++; }
-      return { out: anyScored && prizes.length===3 && n>3 && above>=3, cap, above };
-    });
+    let prizeOut;
+    if(remainingGames===0 && anyScored){
+      // ENDGAME: every group game is in, so the ONLY points left are the two
+      // bonuses (winner +40, boot +60 — never shared). Enumerate every champion ×
+      // boot that can still happen (each pick still alive, plus "someone nobody
+      // picked"), rank all 20 with the real tie-breakers in each, and take each
+      // player's HIGHEST rank across them all. That's their best possible finish;
+      // out of the prizes = even that best finish is below 3rd (tie-breaks and all).
+      const champOpts = D.champion   ? [null] : [...new Set(S.filter(q=>!q.winnerEliminated && q.winner).map(q=>q.winner)), null];
+      const bootOpts  = D.goldenBoot ? [null] : [...new Set(S.filter(q=>!q.bootEliminated && q.topScorer).map(q=>q.topScorer)), null];
+      const cmp=(a,b)=>(b._ts-a._ts)||(b.correct-a.correct)||(a.goalDiff-b.goalDiff)||(b.winnerAliveScore-a.winnerAliveScore)||(b.bootGoals-a.bootGoals)||(b.one-a.one)||(b.ronly-a.ronly)||a.name.localeCompare(b.name);
+      const best={}; S.forEach(q=>best[q.name]={rank:S.length+1,champ:null,boot:null,strictAbove:S.length});
+      champOpts.forEach(champ=>bootOpts.forEach(boot=>{
+        S.forEach(q=>{ q._ts = bankedOf(q) + (champ&&q.winner===champ?PTS.winner:0) + (boot&&q.topScorer===boot?PTS.topScorer:0); });
+        S.slice().sort(cmp).forEach((q,idx)=>{
+          if(idx+1 < best[q.name].rank){
+            const sa = S.reduce((c,x)=>c+(x._ts>q._ts?1:0),0);
+            best[q.name]={rank:idx+1,champ,boot,strictAbove:sa};
+          }
+        });
+      }));
+      S.forEach(q=>{ delete q._ts; });
+      prizeOut = S.map(p=>{
+        const b=best[p.name];
+        const out = prizes.length===3 && n>3 && b.rank>3;
+        return { out, bestRank:b.rank, champ:b.champ, boot:b.boot, tiebreak: out && b.strictAbove<3 };
+      });
+    } else {
+      // GROUP STAGE: ceiling = banked + 10 per remaining game + bonuses still live.
+      const bonusLeftOf = q => (D.goldenBoot || q.bootEliminated ? 0 : (q.topScorer ? PTS.topScorer : 0))
+                             + (D.champion ? 0 : ((q.winner && !q.winnerEliminated) ? PTS.winner : 0));
+      prizeOut = S.map(p=>{
+        const cap = bankedOf(p) + remainingGames*PTS.exact + bonusLeftOf(p);
+        let above = 0; for(const q of S){ if(q!==p && bankedOf(q) > cap) above++; }
+        return { out: anyScored && prizes.length===3 && n>3 && above>=3, cap, above, bestRank:null };
+      });
+    }
+    const ord = k => { const s=["th","st","nd","rd"], x=k%100; return k+(s[(x-20)%10]||s[x]||s[0]); };
+    const bestScenario = po => po.champ&&po.boot?` — if ${esc(po.champ)} win it and ${esc(po.boot)} take the Golden Boot`
+                              : po.champ?` — if ${esc(po.champ)} win the Cup`
+                              : po.boot?` — if ${esc(po.boot)} wins the Golden Boot`
+                              : ` — even with no more bonuses landing`;
 
     S.forEach((p,idx)=>{
       const rank = ranks[idx];
@@ -1532,7 +1563,8 @@ window.LEAGUE_DATA = {
       if(p.winnerWon) meta.push(`<span class="chip alive">★ Champion (+${PTS.winner})</span>`);
       else if(p.winnerEliminated) meta.push(`<span class="chip">Winner pick out</span>`);
       else if(p.winnerAlive) meta.push(`<span class="chip">Winner: ${fteam(p.winner,true)}</span>`);
-      if(prizeOut[idx].out) meta.push(`<span class="chip out">✕ Out of prize contention</span>`);
+      if(prizeOut[idx].out) meta.push(`<span class="chip out">✕ Out${prizeOut[idx].tiebreak?` · tie-break`:``}${prizeOut[idx].bestRank?` · best ${ord(prizeOut[idx].bestRank)}`:``}</span>`);
+      else if(prizeOut[idx].bestRank) meta.push(`<span class="chip best">Can finish ${ord(prizeOut[idx].bestRank)}</span>`);
       const potential = (p.bootLeading?PTS.topScorer:0);
       const paid = anyScored && rank<=3 && prizes.length===3;
       const mv = move[p.name];
@@ -1588,7 +1620,8 @@ window.LEAGUE_DATA = {
           </div>
           ${liveHtml}
           <div class="bd-line">Match points: <b>${p.mp}</b> from ${p.played} finished matches${gaps.length?` · ${gaps.join(" · ")}`:``}.</div>
-          ${prizeOut[idx].out?`<div class="bd-line out-line">✕ <b>Out of prize contention.</b> Best possible finish is <b>${prizeOut[idx].cap}</b> pts${(p.winnerEliminated||p.bootEliminated)?` (${[p.winnerEliminated?`winner pick ${esc(p.winner)} out`:``,p.bootEliminated?`boot pick ${esc(p.topScorer)} out`:``].filter(Boolean).join(", ")})`:` (every bonus still live)`}, and ${prizeOut[idx].above} players are already guaranteed to finish above that.</div>`:``}
+          ${(!prizeOut[idx].out && prizeOut[idx].bestRank)?`<div class="bd-line">Highest possible finish: <b>${ord(prizeOut[idx].bestRank)}</b>${bestScenario(prizeOut[idx])}.</div>`:``}
+          ${prizeOut[idx].out?`<div class="bd-line out-line">✕ <b>Out of the prizes.</b> ${prizeOut[idx].bestRank?`Highest you can finish is <b>${ord(prizeOut[idx].bestRank)}</b>${prizeOut[idx].tiebreak?` — you'd be level on points with those above but lose the tie-break (exact scores, then closeness to total goals)`:``}.`:`Best possible total is <b>${prizeOut[idx].cap}</b> pts and ${prizeOut[idx].above} players are already guaranteed above it.`}${(p.winnerEliminated||p.bootEliminated)?` Dead picks: ${[p.winnerEliminated?`winner ${esc(p.winner)}`:``,p.bootEliminated?`boot ${esc(p.topScorer)}`:``].filter(Boolean).join(", ")}.`:``}</div>`:``}
           ${(sp||formHtml)?`<div class="bd-line trend">${sp?`<span class="trend-l">Rank trend</span> ${sp}`:``}${formHtml}</div>`:``}
           ${p.liveCount?`<div class="bd-line">In play: <b style="color:var(--live)">+${p.liveMp}</b> from ${p.liveCount} live ${p.liveCount===1?"match":"matches"} at the current score — moves with every goal, locks at full time.</div>`:``}
           ${anyScored?`<div class="bd-line">Tiebreakers: <b>${p.correct}</b> exact ${p.correct===1?"score":"scores"} · predicted <b>${p.predGoals}</b> goals vs <b>${actualGoals}</b> actual (${p.goalDiff} off) · boot pick <b>${p.bootGoals}</b> ${p.bootGoals===1?"goal":"goals"}.</div>`:``}
