@@ -491,8 +491,23 @@ window.LEAGUE_DATA = {
   champion: null,      // e.g. "Spain"        -> awards 40 to whoever picked it
   goldenBoot: null,    // e.g. "Harry Kane"   -> awards 60 to whoever picked it
 
-  // Teams that are OUT (greys out dead winner picks). e.g. ["Qatar","Haiti"]
-  eliminated: [],
+  /* Teams that are OUT of the tournament. As the knockouts unfold, add each
+     eliminated team here. This does two things automatically:
+       • greys out any WINNER pick on that team (their +40 can no longer happen)
+       • kills any GOLDEN BOOT pick whose player is on that team (their +60 too),
+         using the scorerTeam map below.
+     e.g. ["Netherlands","Uruguay","Qatar"] */
+  eliminated: ["Netherlands"],
+
+  /* Golden Boot pick -> their national team. Lets the app tell when a boot pick
+     is dead because their country has been knocked out (e.g. Depay once the
+     Netherlands are out). Add a line if you ever change a boot pick. */
+  scorerTeam: {
+    "Harry Kane":"England", "Kylian Mbappé":"France", "Ousmane Dembélé":"France",
+    "Lamine Yamal":"Spain", "Raphinha":"Brazil", "Igor Thiago":"Brazil",
+    "Memphis Depay":"Netherlands", "Lautaro Martínez":"Argentina",
+    "Julián Álvarez":"Argentina"
+  },
 
   // Reference only — do not reorder. The 72 group matches in sheet order.
   fixtures: [
@@ -1180,8 +1195,15 @@ window.LEAGUE_DATA = {
       const winnerAlive = !D.champion && pl.winner && !winnerEliminated;
 
       // golden boot bonus
+      const bootTeamKey = teamKey((D.scorerTeam||{})[pl.topScorer] || "");
+      const bootIsLeader = !!(pl.topScorer && leaders.some(s=>nameMatch(pl.topScorer, s.player)));
+      const bootTeamOut  = !!(pl.topScorer && bootTeamKey && (D.eliminated||[]).map(teamKey).includes(bootTeamKey));
+      // A boot pick is only DEAD if their team is out AND they are NOT the current
+      // top scorer. If they still lead (or are joint-top), they can win the Golden
+      // Boot even with their team eliminated, so the +60 stays live.
+      const bootEliminated = !!(bootTeamOut && !bootIsLeader && !D.goldenBoot);
       const bootWon = !!(D.goldenBoot && pl.topScorer && nameMatch(pl.topScorer, D.goldenBoot));
-      const bootLeading = !D.goldenBoot && pl.topScorer && leaders.some(s=>nameMatch(pl.topScorer,s.player));
+      const bootLeading = !D.goldenBoot && bootIsLeader;
       const bootInTable = !D.goldenBoot && pl.topScorer && SC.some(s=>nameMatch(pl.topScorer,s.player));
 
       let total = mp + liveMp;
@@ -1197,7 +1219,7 @@ window.LEAGUE_DATA = {
         winnerAliveScore: winnerEliminated ? 0 : (pl.winner ? 1 : 0),   // tie-break 3: champion pick still standing
         bootGoals: goalsForPick(pl.topScorer), // tie-break 4: Golden Boot pick's goals so far
         winnerWon, winnerAlive, winnerEliminated:!!winnerEliminated,
-        bootWon, bootLeading, bootInTable
+        bootWon, bootLeading, bootInTable, bootEliminated
       };
     }).sort((a,b)=>
         b.total-a.total                          // 1) points
@@ -1490,7 +1512,7 @@ window.LEAGUE_DATA = {
     // once at least 3 others' floors already exceed their ceiling.
     const remainingGames = gTotal - gFin;
     const bankedOf = q => q.total - (q.liveMp||0);
-    const bonusLeftOf = q => (D.goldenBoot ? 0 : (q.topScorer ? PTS.topScorer : 0))
+    const bonusLeftOf = q => (D.goldenBoot || q.bootEliminated ? 0 : (q.topScorer ? PTS.topScorer : 0))
                            + (D.champion ? 0 : ((q.winner && !q.winnerEliminated) ? PTS.winner : 0));
     const prizeOut = S.map(p=>{
       const cap = bankedOf(p) + remainingGames*PTS.exact + bonusLeftOf(p);
@@ -1504,6 +1526,7 @@ window.LEAGUE_DATA = {
       const open = openRows.has(p.name) ? " open":"";
       const meta=[];
       if(p.bootWon) meta.push(`<span class="chip alive">◆ Golden Boot (+${PTS.topScorer})</span>`);
+      else if(p.bootEliminated) meta.push(`<span class="chip">Boot pick out</span>`);
       else if(p.bootLeading) meta.push(`<span class="chip alive">◆ Boot pick leading</span>`);
       else if(p.bootInTable) meta.push(`<span class="chip">Boot pick scoring</span>`);
       if(p.winnerWon) meta.push(`<span class="chip alive">★ Champion (+${PTS.winner})</span>`);
@@ -1565,11 +1588,11 @@ window.LEAGUE_DATA = {
           </div>
           ${liveHtml}
           <div class="bd-line">Match points: <b>${p.mp}</b> from ${p.played} finished matches${gaps.length?` · ${gaps.join(" · ")}`:``}.</div>
-          ${prizeOut[idx].out?`<div class="bd-line out-line">✕ <b>Out of prize contention.</b> Best possible finish is <b>${prizeOut[idx].cap}</b> pts (every remaining game won + any bonus still live), but ${prizeOut[idx].above} players are already guaranteed to finish above that.</div>`:``}
+          ${prizeOut[idx].out?`<div class="bd-line out-line">✕ <b>Out of prize contention.</b> Best possible finish is <b>${prizeOut[idx].cap}</b> pts${(p.winnerEliminated||p.bootEliminated)?` (${[p.winnerEliminated?`winner pick ${esc(p.winner)} out`:``,p.bootEliminated?`boot pick ${esc(p.topScorer)} out`:``].filter(Boolean).join(", ")})`:` (every bonus still live)`}, and ${prizeOut[idx].above} players are already guaranteed to finish above that.</div>`:``}
           ${(sp||formHtml)?`<div class="bd-line trend">${sp?`<span class="trend-l">Rank trend</span> ${sp}`:``}${formHtml}</div>`:``}
           ${p.liveCount?`<div class="bd-line">In play: <b style="color:var(--live)">+${p.liveMp}</b> from ${p.liveCount} live ${p.liveCount===1?"match":"matches"} at the current score — moves with every goal, locks at full time.</div>`:``}
           ${anyScored?`<div class="bd-line">Tiebreakers: <b>${p.correct}</b> exact ${p.correct===1?"score":"scores"} · predicted <b>${p.predGoals}</b> goals vs <b>${actualGoals}</b> actual (${p.goalDiff} off) · boot pick <b>${p.bootGoals}</b> ${p.bootGoals===1?"goal":"goals"}.</div>`:``}
-          <div class="bd-line">Top scorer pick: <b>${esc(p.topScorer||"—")}</b>${p.bootWon?` — won (+${PTS.topScorer})`:p.bootLeading?` — currently leading`:p.bootInTable?` — on the scoresheet`:``}.</div>
+          <div class="bd-line">Top scorer pick: <b>${esc(p.topScorer||"—")}</b>${p.bootWon?` — won (+${PTS.topScorer})`:p.bootEliminated?` — out (team eliminated)`:p.bootLeading?` — currently leading`:p.bootInTable?` — on the scoresheet`:``}.</div>
           <div class="bd-line">Winner pick: <b>${esc(p.winner||"—")}</b>${p.winnerWon?` — champions (+${PTS.winner})`:p.winnerEliminated?` — eliminated`:``}.</div>
         </div>
       </div>`;
