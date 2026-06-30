@@ -1538,8 +1538,10 @@ window.LEAGUE_DATA = {
       prizeOut = S.map(p=>{
         const b=best[p.name];
         const out = prizes.length===3 && n>3 && b.rank>3;
+        const maxPts = bankedOf(p) + ((!D.champion && p.winner && !p.winnerEliminated) ? PTS.winner : 0)
+                                   + ((!D.goldenBoot && p.topScorer && !p.bootEliminated) ? PTS.topScorer : 0);
         return { out, bestRank:b.rank, champ:b.champ, boot:b.boot, tiebreak: out && b.strictAbove<3,
-                 strictAbove:b.strictAbove, tbAbove:(b.rank-1)-b.strictAbove, above:b.above };
+                 strictAbove:b.strictAbove, tbAbove:(b.rank-1)-b.strictAbove, above:b.above, maxPts };
       });
     } else {
       // GROUP STAGE: ceiling = banked + 10 per remaining game + bonuses still live.
@@ -1562,7 +1564,7 @@ window.LEAGUE_DATA = {
                             : `no further bonuses landing for anyone`;
     const whyNote = po => {
       if(!po.bestRank) return "";
-      let s = `<b>Why this is the highest you can finish:</b> with every group game played, the only points left are the winner (+${PTS.winner}) and Golden Boot (+${PTS.topScorer}) bonuses — and neither is shared, so every correct picker banks the full amount. The figure above is your best case (${scenPhrase(po)}).`;
+      let s = `<b>Why this is the highest you can finish:</b> with every group game played, the only points left are the winner (+${PTS.winner}) and Golden Boot (+${PTS.topScorer}) bonuses — and neither is shared, so every correct picker banks the full amount. The most you can reach is <b>${po.maxPts} pts</b> (${scenPhrase(po)}), which would place you <b>${ord(po.bestRank)}</b>.`;
       if(po.bestRank===1){
         s += ` In that scenario nobody finishes above you, so you can still win it outright.`;
       } else {
@@ -1644,8 +1646,8 @@ window.LEAGUE_DATA = {
           </div>
           ${liveHtml}
           <div class="bd-line">Match points: <b>${p.mp}</b> from ${p.played} finished matches${gaps.length?` · ${gaps.join(" · ")}`:``}.</div>
-          ${(!prizeOut[idx].out && prizeOut[idx].bestRank)?`<div class="bd-line">Highest possible finish: <b>${ord(prizeOut[idx].bestRank)}</b>${bestScenario(prizeOut[idx])}.</div>`:``}
-          ${prizeOut[idx].out?`<div class="bd-line out-line">✕ <b>Out of the prizes.</b> ${prizeOut[idx].bestRank?`Highest you can finish is <b>${ord(prizeOut[idx].bestRank)}</b>${prizeOut[idx].tiebreak?` — you'd be level on points with those above but lose the tie-break (exact scores, then closeness to total goals)`:``}.`:`Best possible total is <b>${prizeOut[idx].cap}</b> pts and ${prizeOut[idx].above} players are already guaranteed above it.`}${(p.winnerEliminated||p.bootEliminated)?` Dead picks: ${[p.winnerEliminated?`winner ${esc(p.winner)}`:``,p.bootEliminated?`boot ${esc(p.topScorer)}`:``].filter(Boolean).join(", ")}.`:``}</div>`:``}
+          ${(!prizeOut[idx].out && prizeOut[idx].bestRank)?`<div class="bd-line">Highest possible finish: <b>${ord(prizeOut[idx].bestRank)} place</b> · max <b>${prizeOut[idx].maxPts} pts</b>${bestScenario(prizeOut[idx])}.</div>`:``}
+          ${prizeOut[idx].out?`<div class="bd-line out-line">✕ <b>Out of the prizes.</b> ${prizeOut[idx].bestRank?`Highest you can finish is <b>${ord(prizeOut[idx].bestRank)} place</b> (max <b>${prizeOut[idx].maxPts} pts</b>)${prizeOut[idx].tiebreak?` — you'd be level on points with those above but lose the tie-break (exact scores, then closeness to total goals)`:``}.`:`Best possible total is <b>${prizeOut[idx].cap}</b> pts and ${prizeOut[idx].above} players are already guaranteed above it.`}${(p.winnerEliminated||p.bootEliminated)?` Dead picks: ${[p.winnerEliminated?`winner ${esc(p.winner)}`:``,p.bootEliminated?`boot ${esc(p.topScorer)}`:``].filter(Boolean).join(", ")}.`:``}</div>`:``}
           ${prizeOut[idx].bestRank?`<div class="bd-line why">${whyNote(prizeOut[idx])}</div>`:``}
           ${(sp||formHtml)?`<div class="bd-line trend">${sp?`<span class="trend-l">Rank trend</span> ${sp}`:``}${formHtml}</div>`:``}
           ${p.liveCount?`<div class="bd-line">In play: <b style="color:var(--live)">+${p.liveMp}</b> from ${p.liveCount} live ${p.liveCount===1?"match":"matches"} at the current score — moves with every goal, locks at full time.</div>`:``}
