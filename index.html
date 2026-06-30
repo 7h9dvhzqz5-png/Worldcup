@@ -174,6 +174,9 @@
   .lb-row.isout{opacity:.74}
   .lb-row.isout.me{opacity:1}
   .bd-line.out-line{color:#d98a8c}
+  .bd-line.why{color:var(--muted);font-size:11.5px;line-height:1.55;border-left:2px solid var(--line);padding-left:10px;margin-top:8px}
+  .tap-hint{display:flex;gap:8px;align-items:flex-start;margin:0 0 4px;padding:10px 13px;border:1px solid rgba(61,123,255,.28);background:rgba(61,123,255,.06);border-radius:11px;color:#cfe0ff;font-size:12.5px;line-height:1.45}
+  .tap-hint::before{content:"›";font-family:var(--mono);font-weight:700;color:var(--host-b);font-size:15px;line-height:1.1}
   .who .meta .chip.best{color:#cfe0ff;border-color:rgba(61,123,255,.4);background:rgba(61,123,255,.08)}
   /* prize pot + podium markers */
   .pot{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:12px 14px 12px 16px;border-bottom:1px solid var(--line);background:linear-gradient(90deg, rgba(230,184,76,.07), transparent);position:relative}
@@ -1485,6 +1488,7 @@ window.LEAGUE_DATA = {
     if(prizes.length===3){
       html += `<div class="pot"><div class="pl">Prize pot <span>£${pot}</span></div><div class="br">${n} × £${C.buyIn}&nbsp; ·&nbsp; £${prizes[0]} / £${prizes[1]} / £${prizes[2]}</div></div>`;
     }
+    html += `<div class="tap-hint">Tap your name for your full stats — points breakdown, tie-breakers, your winner &amp; top-scorer picks, and exactly how your best possible finish is worked out.</div>`;
 
     const anyScored = S.some(p=>p.total>0);   // pre-tournament, everyone is on 0 — show plain dashes
     // strict unique ranking — the tiebreak chain in computeStandings guarantees no two players are equal
@@ -1519,13 +1523,14 @@ window.LEAGUE_DATA = {
       const champOpts = D.champion   ? [null] : [...new Set(S.filter(q=>!q.winnerEliminated && q.winner).map(q=>q.winner)), null];
       const bootOpts  = D.goldenBoot ? [null] : [...new Set(S.filter(q=>!q.bootEliminated && q.topScorer).map(q=>q.topScorer)), null];
       const cmp=(a,b)=>(b._ts-a._ts)||(b.correct-a.correct)||(a.goalDiff-b.goalDiff)||(b.winnerAliveScore-a.winnerAliveScore)||(b.bootGoals-a.bootGoals)||(b.one-a.one)||(b.ronly-a.ronly)||a.name.localeCompare(b.name);
-      const best={}; S.forEach(q=>best[q.name]={rank:S.length+1,champ:null,boot:null,strictAbove:S.length});
+      const best={}; S.forEach(q=>best[q.name]={rank:S.length+1,champ:null,boot:null,strictAbove:S.length,above:[]});
       champOpts.forEach(champ=>bootOpts.forEach(boot=>{
         S.forEach(q=>{ q._ts = bankedOf(q) + (champ&&q.winner===champ?PTS.winner:0) + (boot&&q.topScorer===boot?PTS.topScorer:0); });
-        S.slice().sort(cmp).forEach((q,idx)=>{
+        const ranked = S.slice().sort(cmp);
+        ranked.forEach((q,idx)=>{
           if(idx+1 < best[q.name].rank){
             const sa = S.reduce((c,x)=>c+(x._ts>q._ts?1:0),0);
-            best[q.name]={rank:idx+1,champ,boot,strictAbove:sa};
+            best[q.name]={rank:idx+1,champ,boot,strictAbove:sa,above:ranked.slice(0,idx).map(x=>x.name)};
           }
         });
       }));
@@ -1533,7 +1538,8 @@ window.LEAGUE_DATA = {
       prizeOut = S.map(p=>{
         const b=best[p.name];
         const out = prizes.length===3 && n>3 && b.rank>3;
-        return { out, bestRank:b.rank, champ:b.champ, boot:b.boot, tiebreak: out && b.strictAbove<3 };
+        return { out, bestRank:b.rank, champ:b.champ, boot:b.boot, tiebreak: out && b.strictAbove<3,
+                 strictAbove:b.strictAbove, tbAbove:(b.rank-1)-b.strictAbove, above:b.above };
       });
     } else {
       // GROUP STAGE: ceiling = banked + 10 per remaining game + bonuses still live.
@@ -1550,6 +1556,24 @@ window.LEAGUE_DATA = {
                               : po.champ?` — if ${esc(po.champ)} win the Cup`
                               : po.boot?` — if ${esc(po.boot)} wins the Golden Boot`
                               : ` — even with no more bonuses landing`;
+    const scenPhrase = po => po.champ&&po.boot?`${esc(po.champ)} winning the Cup and ${esc(po.boot)} taking the Golden Boot`
+                            : po.champ?`${esc(po.champ)} winning the Cup`
+                            : po.boot?`${esc(po.boot)} winning the Golden Boot`
+                            : `no further bonuses landing for anyone`;
+    const whyNote = po => {
+      if(!po.bestRank) return "";
+      let s = `<b>Why this is the highest you can finish:</b> with every group game played, the only points left are the winner (+${PTS.winner}) and Golden Boot (+${PTS.topScorer}) bonuses — and neither is shared, so every correct picker banks the full amount. The figure above is your best case (${scenPhrase(po)}).`;
+      if(po.bestRank===1){
+        s += ` In that scenario nobody finishes above you, so you can still win it outright.`;
+      } else {
+        const ab=po.above||[], shown=ab.slice(0,3).map(esc).join(", "), more=ab.length>3?` and ${ab.length-3} other${ab.length-3>1?'s':''}`:``;
+        const bits=[];
+        if(po.strictAbove>0) bits.push(`${po.strictAbove} would out-point you`);
+        if(po.tbAbove>0) bits.push(`${po.tbAbove} would be level on points but ahead on the tie-break (most exact scores, then closest to total goals)`);
+        s += ` Even then, ${ab.length} ${ab.length===1?"player finishes":"players finish"} above you (${shown}${more})${bits.length?` — ${bits.join(", and ")}`:``}. With no match points left to win, that gap can't be closed.`;
+      }
+      return s;
+    };
 
     S.forEach((p,idx)=>{
       const rank = ranks[idx];
@@ -1622,6 +1646,7 @@ window.LEAGUE_DATA = {
           <div class="bd-line">Match points: <b>${p.mp}</b> from ${p.played} finished matches${gaps.length?` · ${gaps.join(" · ")}`:``}.</div>
           ${(!prizeOut[idx].out && prizeOut[idx].bestRank)?`<div class="bd-line">Highest possible finish: <b>${ord(prizeOut[idx].bestRank)}</b>${bestScenario(prizeOut[idx])}.</div>`:``}
           ${prizeOut[idx].out?`<div class="bd-line out-line">✕ <b>Out of the prizes.</b> ${prizeOut[idx].bestRank?`Highest you can finish is <b>${ord(prizeOut[idx].bestRank)}</b>${prizeOut[idx].tiebreak?` — you'd be level on points with those above but lose the tie-break (exact scores, then closeness to total goals)`:``}.`:`Best possible total is <b>${prizeOut[idx].cap}</b> pts and ${prizeOut[idx].above} players are already guaranteed above it.`}${(p.winnerEliminated||p.bootEliminated)?` Dead picks: ${[p.winnerEliminated?`winner ${esc(p.winner)}`:``,p.bootEliminated?`boot ${esc(p.topScorer)}`:``].filter(Boolean).join(", ")}.`:``}</div>`:``}
+          ${prizeOut[idx].bestRank?`<div class="bd-line why">${whyNote(prizeOut[idx])}</div>`:``}
           ${(sp||formHtml)?`<div class="bd-line trend">${sp?`<span class="trend-l">Rank trend</span> ${sp}`:``}${formHtml}</div>`:``}
           ${p.liveCount?`<div class="bd-line">In play: <b style="color:var(--live)">+${p.liveMp}</b> from ${p.liveCount} live ${p.liveCount===1?"match":"matches"} at the current score — moves with every goal, locks at full time.</div>`:``}
           ${anyScored?`<div class="bd-line">Tiebreakers: <b>${p.correct}</b> exact ${p.correct===1?"score":"scores"} · predicted <b>${p.predGoals}</b> goals vs <b>${actualGoals}</b> actual (${p.goalDiff} off) · boot pick <b>${p.bootGoals}</b> ${p.bootGoals===1?"goal":"goals"}.</div>`:``}
