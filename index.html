@@ -1515,34 +1515,35 @@ window.LEAGUE_DATA = {
     let prizeOut;
     if(remainingGames===0 && anyScored){
       // ENDGAME: every group game is in, so the ONLY points left are the two
-      // bonuses (winner +40, boot +60 — never shared). Enumerate every champion ×
-      // boot that can still happen (each pick still alive, plus "someone nobody
-      // picked"), rank all 20 with the real tie-breakers in each, and take each
-      // player's HIGHEST rank across them all. That's their best possible finish;
-      // out of the prizes = even that best finish is below 3rd (tie-breaks and all).
+      // bonuses (winner +40, boot +60 — never shared).
+      //  • HIGHEST finish = rank when the player's OWN picks land (their max points).
+      //  • LOWEST finish  = worst rank across every champion×boot outcome (their
+      //    picks miss and rivals' picks land). Real tie-breakers used throughout.
       const champOpts = D.champion   ? [null] : [...new Set(S.filter(q=>!q.winnerEliminated && q.winner).map(q=>q.winner)), null];
       const bootOpts  = D.goldenBoot ? [null] : [...new Set(S.filter(q=>!q.bootEliminated && q.topScorer).map(q=>q.topScorer)), null];
       const cmp=(a,b)=>(b._ts-a._ts)||(b.correct-a.correct)||(a.goalDiff-b.goalDiff)||(b.winnerAliveScore-a.winnerAliveScore)||(b.bootGoals-a.bootGoals)||(b.one-a.one)||(b.ronly-a.ronly)||a.name.localeCompare(b.name);
-      const best={}, worst={};
-      S.forEach(q=>{ best[q.name]={rank:S.length+1,champ:null,boot:null,strictAbove:S.length,above:[]}; worst[q.name]={rank:0,champ:null,boot:null}; });
+      const rankIn=(champ,boot)=>{ S.forEach(q=>{ q._ts = bankedOf(q) + (champ&&q.winner===champ?PTS.winner:0) + (boot&&q.topScorer===boot?PTS.topScorer:0); }); return S.slice().sort(cmp); };
+      // HIGHEST finish — each player's own picks landing (dead picks award nothing)
+      const ownChamp = p => (!D.champion   && p.winner    && !p.winnerEliminated) ? p.winner    : null;
+      const ownBoot  = p => (!D.goldenBoot && p.topScorer && !p.bootEliminated)   ? p.topScorer : null;
+      const best={};
+      S.forEach(p=>{
+        const champ=ownChamp(p), boot=ownBoot(p);
+        const ranked=rankIn(champ,boot);
+        const idx=ranked.findIndex(x=>x.name===p.name);
+        const sa=S.reduce((c,x)=>c+(x._ts>p._ts?1:0),0);
+        best[p.name]={rank:idx+1,champ,boot,strictAbove:sa,above:ranked.slice(0,idx).map(x=>x.name)};
+      });
+      // LOWEST finish — worst rank across all outcomes
+      const worst={}; S.forEach(q=>worst[q.name]={rank:0,champ:null,boot:null});
       champOpts.forEach(champ=>bootOpts.forEach(boot=>{
-        S.forEach(q=>{ q._ts = bankedOf(q) + (champ&&q.winner===champ?PTS.winner:0) + (boot&&q.topScorer===boot?PTS.topScorer:0); });
-        const ranked = S.slice().sort(cmp);
-        ranked.forEach((q,idx)=>{
-          const r=idx+1;
-          if(r < best[q.name].rank){
-            const sa = S.reduce((c,x)=>c+(x._ts>q._ts?1:0),0);
-            best[q.name]={rank:r,champ,boot,strictAbove:sa,above:ranked.slice(0,idx).map(x=>x.name)};
-          }
-          if(r > worst[q.name].rank){ worst[q.name]={rank:r,champ,boot}; }
-        });
+        rankIn(champ,boot).forEach((q,idx)=>{ if(idx+1 > worst[q.name].rank) worst[q.name]={rank:idx+1,champ,boot}; });
       }));
       S.forEach(q=>{ delete q._ts; });
       prizeOut = S.map(p=>{
         const b=best[p.name], w=worst[p.name];
         const out = prizes.length===3 && n>3 && b.rank>3;
-        const maxPts = bankedOf(p) + ((!D.champion && p.winner && !p.winnerEliminated) ? PTS.winner : 0)
-                                   + ((!D.goldenBoot && p.topScorer && !p.bootEliminated) ? PTS.topScorer : 0);
+        const maxPts = bankedOf(p) + (b.champ?PTS.winner:0) + (b.boot?PTS.topScorer:0);
         return { out, bestRank:b.rank, champ:b.champ, boot:b.boot, tiebreak: out && b.strictAbove<3,
                  strictAbove:b.strictAbove, tbAbove:(b.rank-1)-b.strictAbove, above:b.above, maxPts,
                  worstRank:w.rank, worstChamp:w.champ, worstBoot:w.boot, minPts:bankedOf(p),
