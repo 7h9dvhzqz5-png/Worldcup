@@ -347,9 +347,17 @@
     --host-b:#C8102E;
     --tri:linear-gradient(90deg,#C8102E 0 20%,#fff 20% 40%,#C8102E 40% 60%,#fff 60% 80%,#C8102E 80% 100%);
     background:
-      radial-gradient(1200px 600px at 50% -10%, #2a0a12 0%, var(--pitch) 55%) fixed,
+      radial-gradient(1200px 600px at 50% -10%, #38101a 0%, var(--pitch) 55%) fixed,
       var(--pitch);
   }
+  /* Giant St George cross over the whole page */
+  body.england::after{
+    content:"";position:fixed;inset:0;z-index:0;pointer-events:none;
+    background:
+      linear-gradient(90deg, transparent 0 calc(50% - 9vmin), rgba(200,16,46,.07) calc(50% - 9vmin) calc(50% + 9vmin), transparent calc(50% + 9vmin) 100%),
+      linear-gradient(0deg,  transparent 0 calc(50% - 9vmin), rgba(200,16,46,.07) calc(50% - 9vmin) calc(50% + 9vmin), transparent calc(50% + 9vmin) 100%);
+  }
+  body.england .wrap, body.england header.top{position:relative;z-index:1}
   body.england .hoststripe{height:6px}
   body.england .crest{box-shadow:0 6px 16px -6px rgba(200,16,46,.55), inset 0 1px 0 rgba(255,255,255,.14);font-size:20px}
   body.england h2.section::before,
@@ -381,6 +389,27 @@
   body.england .lb-row.engbacker{border-color:rgba(200,16,46,.55);background:linear-gradient(90deg,rgba(200,16,46,.10),rgba(255,255,255,.02))}
   body.england .lb-row.engbacker::before{content:"";position:absolute;left:0;top:0;bottom:0;width:3px;background:linear-gradient(180deg,#C8102E 0 33%,#fff 33% 66%,#C8102E 66% 100%)}
   .chip.eng{color:#ffd9de;border-color:rgba(200,16,46,.65);background:rgba(200,16,46,.16)}
+  /* Bunting garland under the header */
+  .eng-bunting{display:flex;justify-content:space-between;height:20px;overflow:hidden;padding:0 4px}
+  .eng-bunting i{flex:1;max-width:26px;height:18px;margin:0 2px;clip-path:polygon(0 0,100% 0,50% 100%);animation:buntSway 3.2s ease-in-out infinite}
+  .eng-bunting i:nth-child(odd){background:#C8102E}
+  .eng-bunting i:nth-child(even){background:#fff}
+  .eng-bunting i:nth-child(3n){animation-delay:.6s}
+  .eng-bunting i:nth-child(3n+1){animation-delay:1.3s}
+  @keyframes buntSway{0%,100%{transform:rotate(0deg)}50%{transform:rotate(6deg)}}
+  /* Scrolling IT'S COMING HOME marquee */
+  .eng-marquee{position:relative;overflow:hidden;margin:10px 0 2px;border:1px solid rgba(200,16,46,.5);border-radius:10px;background:repeating-linear-gradient(135deg,rgba(200,16,46,.16) 0 18px,rgba(255,255,255,.05) 18px 36px)}
+  .eng-marquee .mq{display:inline-block;white-space:nowrap;padding:8px 0;font-family:'Archivo';font-weight:800;font-size:13.5px;letter-spacing:.14em;color:#ffd9de;animation:engScroll 16s linear infinite}
+  @keyframes engScroll{0%{transform:translateX(0)}100%{transform:translateX(-50%)}}
+  /* Pulsing banner headline */
+  .eng-banner .t1{font-family:'Archivo';font-weight:800;font-size:19px;letter-spacing:.04em;animation:engPulse 1.6s ease-in-out infinite}
+  @keyframes engPulse{0%,100%{transform:scale(1)}50%{transform:scale(1.06);text-shadow:0 0 18px rgba(200,16,46,.8)}}
+  .eng-banner .fl{font-size:30px;animation:engPulse 1.6s ease-in-out infinite}
+  /* Red tabs + section flags */
+  body.england .tab.active{border-color:rgba(200,16,46,.7);background:rgba(200,16,46,.16);color:#ffd9de}
+  body.england h2.section::after{content:" 🏴󠁧󠁢󠁥󠁮󠁧󠁿"}
+  body.england .refresh{border-color:rgba(200,16,46,.6);color:#ffd9de}
+  @media (prefers-reduced-motion: reduce){ .eng-marquee .mq,.eng-bunting i,.eng-banner .t1,.eng-banner .fl{animation:none} }
   /* Confetti */
   #engConfetti{position:fixed;inset:0;pointer-events:none;z-index:60;overflow:hidden}
   .cf{position:absolute;top:-14px;width:9px;height:14px;border-radius:2px;opacity:.9;animation:cfFall linear infinite}
@@ -1519,7 +1548,7 @@ window.LEAGUE_DATA = {
   function renderBanners(){
     const b=$("#banners"); b.innerHTML="";
     if(C.themeEngland){
-      b.insertAdjacentHTML("beforeend",`<div class="eng-banner"><span class="fl">🏴󠁧󠁢󠁥󠁮󠁧󠁿</span><div style="flex:1;min-width:0"><div class="t1">IT'S COMING HOME</div><div class="t2">England are in the World Cup semi-final — the league's behind you. Three Lions on a shirt… ⚽</div></div></div>`);
+      b.insertAdjacentHTML("beforeend",`<div class="eng-banner"><span class="fl">🏴󠁧󠁢󠁥󠁮󠁧󠁿</span><div style="flex:1;min-width:0"><div class="t1">IT'S COMING HOME</div><div class="t2">England are in the World Cup <b>SEMI-FINAL</b>. Nobody is calm. COME ON ENGLAND! 🦁🦁🦁⚽🍺</div></div><span class="fl">🏴󠁧󠁢󠁥󠁮󠁧󠁿</span></div>`);
     }
     if(api.attempted && !api.ok){
       b.insertAdjacentHTML("beforeend",`<div class="banner warn"><div><b>Live feed unreachable right now.</b> Showing your committed results — the app keeps retrying every minute. You can also paste finals into <code>manualResults</code>.</div></div>`);
@@ -1662,7 +1691,7 @@ window.LEAGUE_DATA = {
       const open = openRows.has(p.name) ? " open":"";
       const meta=[];
       const engBacker = !!(C.themeEngland && p.winner==="England" && !p.winnerEliminated);
-      if(engBacker) meta.push(`<span class="chip eng">🏴󠁧󠁢󠁥󠁮󠁧󠁿 England's man — carrying the league</span>`);
+      if(engBacker) meta.push(`<span class="chip eng">👑 ENGLAND'S MAN 🦁🦁🦁 HE BELIEVED WHEN NOBODY ELSE DID</span>`);
       if(p.bootWon) meta.push(`<span class="chip alive">◆ Golden Boot (+${PTS.topScorer})</span>`);
       else if(p.bootEliminated) meta.push(`<span class="chip">Boot pick out</span>`);
       else if(p.bootLeading) meta.push(`<span class="chip alive">◆ Boot pick leading</span>`);
@@ -2138,23 +2167,35 @@ window.LEAGUE_DATA = {
       setTimeout(()=>{ if(!anthemOn) window.__engAnthem(); }, 250);
     }
     $("#crest").textContent = "🏴󠁧󠁢󠁥󠁮󠁧󠁿";
-    $("#subtitle").textContent = (C.subtitle||"Prediction League") + " · Come on England! 🏴󠁧󠁢󠁥󠁮󠁧󠁿";
+    $("#title").textContent = "IT'S COMING HOME";
+    $("#subtitle").textContent = (C.title||"World Cup 26") + " Prediction League · ENG-ER-LAND! 🏴󠁧󠁢󠁥󠁮󠁧󠁿";
+    try{ document.title = "IT'S COMING HOME 🏴󠁧󠁢󠁥󠁮󠁧󠁿 " + (C.title||"World Cup 26"); }catch(e){}
+    // Bunting + permanent scrolling marquee, pinned inside the sticky header
+    try{
+      const hdr=document.querySelector("header.top");
+      if(hdr && hdr.insertAdjacentHTML){
+        let flags=""; for(let i=0;i<40;i++) flags+="<i></i>";
+        const line = "IT'S COMING HOME&nbsp;&nbsp;🏴󠁧󠁢󠁥󠁮󠁧󠁿&nbsp;&nbsp;".repeat(8);
+        hdr.insertAdjacentHTML("beforeend", `<div class="eng-bunting" aria-hidden="true">${flags}</div><div class="eng-marquee" aria-hidden="true"><span class="mq">${line}${line}</span></div>`);
+      }
+    }catch(e){}
     // red & white confetti (skipped automatically for reduced-motion users)
     try{
       if(!(window.matchMedia && matchMedia("(prefers-reduced-motion: reduce)").matches)){
         const holder=document.createElement("div"); holder.id="engConfetti";
-        const N = (window.innerWidth||800) < 480 ? 46 : 72;
+        const N = (window.innerWidth||800) < 480 ? 70 : 110;
         let bits="";
         for(let i=0;i<N;i++){
-          const flag = i%12===0;
-          const cls = flag ? "cf f" : (i%2 ? "cf r" : "cf w");
+          let emo="";
+          if(i%10===0) emo="🏴󠁧󠁢󠁥󠁮󠁧󠁿"; else if(i%9===0) emo="🦁"; else if(i%13===0) emo="⚽"; else if(i%23===0) emo="🍺";
+          const cls = emo ? "cf f" : (i%2 ? "cf r" : "cf w");
           const left=(Math.random()*100).toFixed(2);
-          const dur=(6+Math.random()*7).toFixed(2);
-          const delay=(-Math.random()*13).toFixed(2);
-          const sway=((Math.random()*120)-60).toFixed(0)+"px";
+          const dur=(5+Math.random()*7).toFixed(2);
+          const delay=(-Math.random()*12).toFixed(2);
+          const sway=((Math.random()*140)-70).toFixed(0)+"px";
           const spin=(360+Math.random()*540).toFixed(0)+"deg";
-          const scale=(0.7+Math.random()*0.8).toFixed(2);
-          bits+=`<span class="${cls}" style="left:${left}%;animation-duration:${dur}s;animation-delay:${delay}s;--sway:${sway};--spin:${spin};transform:scale(${scale})">${flag?"🏴󠁧󠁢󠁥󠁮󠁧󠁿":""}</span>`;
+          const scale=(0.7+Math.random()*0.9).toFixed(2);
+          bits+=`<span class="${cls}" style="left:${left}%;animation-duration:${dur}s;animation-delay:${delay}s;--sway:${sway};--spin:${spin};transform:scale(${scale})">${emo}</span>`;
         }
         holder.innerHTML=bits;
         document.body.appendChild(holder);
