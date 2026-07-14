@@ -410,6 +410,16 @@
   body.england h2.section::after{content:" 🏴󠁧󠁢󠁥󠁮󠁧󠁿"}
   body.england .refresh{border-color:rgba(200,16,46,.6);color:#ffd9de}
   @media (prefers-reduced-motion: reduce){ .eng-marquee .mq,.eng-bunting i,.eng-banner .t1,.eng-banner .fl{animation:none} }
+  .lb-sec{margin:14px 0 6px;padding:9px 12px;border-radius:10px;border:1px solid var(--line);background:rgba(255,255,255,.03)}
+  .lb-sec .ls-t{font-family:'Archivo';font-weight:800;font-size:12px;letter-spacing:.1em}
+  .lb-sec .ls-n{opacity:.6;font-weight:700;margin-left:4px}
+  .lb-sec .ls-s{color:var(--muted);font-size:11px;margin-top:2px}
+  .lb-sec.sec0{border-color:rgba(70,190,110,.45);background:rgba(70,190,110,.06)}
+  .lb-sec.sec0 .ls-t{color:#c9f0d4}
+  .lb-sec.sec1{border-color:rgba(230,150,60,.45);background:rgba(230,150,60,.06)}
+  .lb-sec.sec1 .ls-t{color:#ffd9a8}
+  .lb-sec.sec2{border-color:rgba(217,138,140,.4);background:rgba(217,138,140,.05)}
+  .lb-sec.sec2 .ls-t{color:#d98a8c}
   .who .meta .chip.real{color:#c9f0d4;border-color:rgba(70,190,110,.5);background:rgba(70,190,110,.10)}
   .who .meta .chip.lshot{color:#ffd9a8;border-color:rgba(230,150,60,.55);background:rgba(230,150,60,.10)}
   .bd-line.lshot-line{color:#ffce93}
@@ -1151,7 +1161,7 @@ window.LEAGUE_DATA = {
 
   /* ---------------- Results store ---------------- */
   // mergedResults: fixtureId -> {h,a,status,live,finished,started,source}
-  let api = { byPair:{}, scorers:{}, live:[], recent:[], upcoming:[], ok:false, attempted:false, source:"", finalDone:false, autoChampion:null, autoElim:[] };
+  let api = { byPair:{}, scorers:{}, live:[], recent:[], upcoming:[], ok:false, attempted:false, source:"", finalDone:false, autoChampion:null, autoElim:[], knockouts:[] };
 
   /* ---------------- Permanent full-time store ----------------
      Once a match is reported FINAL by the feed, its score is written to the
@@ -1454,6 +1464,12 @@ window.LEAGUE_DATA = {
         started: live||finished||hasScore,
         home:nameOf(H), away:nameOf(A), date:(ev.date||"").slice(0,10)
       };
+      // Knockout games (post-group, real team names): collect for the top-of-page
+      // ticker — the group scores retire once these begin.
+      if(rec.date && rec.date > GROUP_END){
+        const k={home:rec.home, away:rec.away, h:rec.h, a:rec.a, live:rec.live, finished:rec.finished, date:rec.date, kick:(ev.date||"")};
+        if(!api.knockouts.some(x=>x.home===k.home&&x.away===k.away&&x.date===k.date)) api.knockouts.push(k);
+      }
       const pair = hk+"|"+ak;
       // Only map results dated within the group stage to our 72 fixtures, so a later-round
       // meeting of the same two teams can't overwrite a group-game score. (Scorers below
@@ -1531,6 +1547,7 @@ window.LEAGUE_DATA = {
     api.scorers = {};            // rebuild scorer tally each pull
     api.unmatched = 0; api.unmatchedTeams = [];   // feed-health diagnostics
     api.autoElim = [];                             // re-derived from the feed each poll
+    api.knockouts = [];
     let any=false;
 
     // 1) PRIMARY: ESPN — live scores + scorers, whole tournament in one call, no key.
@@ -1586,6 +1603,31 @@ window.LEAGUE_DATA = {
 
   function renderTicker(results){
     const t = $("#ticker"); t.innerHTML="";
+    // ---- knockout mode: the group games are done and dusted, so once knockout
+    // games appear in the feed the ticker shows THOSE instead — live first,
+    // then upcoming (semis/final), then the latest knockout results.
+    const ko=(api.knockouts||[]).slice().sort((x,y)=>(x.kick||x.date||"").localeCompare(y.kick||y.date||""));
+    if(ko.length){
+      const roundLabel = d=>{
+        const fin=C.finalDate||"2026-07-19";
+        const days=Math.round((new Date(fin+"T12:00Z")-new Date((d||fin)+"T12:00Z"))/86400000);
+        return days<=0?"FINAL":days===1?"3RD PLACE":days<=5?"SEMI-FINAL":days<=9?"QUARTER-FINAL":days<=13?"ROUND OF 16":"ROUND OF 32";
+      };
+      const kfmt = d=>{ if(!/^\d{4}-\d{2}-\d{2}/.test(d||"")) return d||""; return new Date(d.slice(0,10)+"T12:00:00Z").toLocaleDateString("en-GB",{weekday:"short",day:"numeric",month:"short"}); };
+      const koLive=ko.filter(k=>k.live), koUp=ko.filter(k=>!k.live&&!k.finished), koFin=ko.filter(k=>k.finished).reverse().slice(0,6);
+      [...koLive, ...koUp, ...koFin].forEach(k=>{
+        const state = k.live ? `<span class="dot"></span><span class="tk-state live">Live</span>`
+                     : k.finished ? `<span class="tk-state ft">FT</span>`
+                     : `<span class="tk-state">${kfmt(k.date)}</span>`;
+        const mid = (k.h!=null&&k.a!=null) ? `<span class="sc">${k.h} – ${k.a}</span>` : `<span class="sc">v</span>`;
+        t.insertAdjacentHTML("beforeend", `
+        <div class="tk">
+          <div class="tk-top">${roundLabel(k.date)} ${state}</div>
+          <div class="tk-score"><span>${fteam(k.home,true)}</span>${mid}<span>${fteam(k.away,true)}</span></div>
+        </div>`);
+      });
+      return;
+    }
     const rows = D.fixtures.map((f,i)=>({f,i,r:results[f.id]})).filter(x=>x.r);
     const live = rows.filter(x=>x.r.live);
     const recent = rows.filter(x=>x.r.finished).slice(-14);
@@ -1829,6 +1871,13 @@ window.LEAGUE_DATA = {
       return s;
     };
 
+    // ---- table sections: in the hunt / needs a long shot / out ----
+    // in the hunt  = a top-3 finish is on in the REALISTIC picture (rBest<=3)
+    // long shot    = top 3 only if an off-the-pace boot lands (math best<=3, realistic best>3)
+    // out          = mathematically out of the top 3
+    const cats = S.map((_,i)=> prizeOut[i].out ? 2 : ((prizeOut[i].rBest && prizeOut[i].rBest>3) ? 1 : 0));
+    const useSections = !finale && anyScored && cats.some(c=>c>0);
+    const rowHtmls = [];
     S.forEach((p,idx)=>{
       const rank = ranks[idx];
       const leader = rank===1 && p.total>0;
@@ -1892,7 +1941,7 @@ window.LEAGUE_DATA = {
       const formHtml = (anyScored && f!=null && f!==0) ? `<span class="form ${f>0?'up':'dn'}">${f>0?'+':''}${f} since last result</span>` : "";
       const sp = sparkline(hist.spark[p.name]||[], n);
 
-      html += `
+      rowHtmls[idx] = `
       <div class="lb-row${leader?' leader':''}${isMe?' me':''}${prizeOut[idx].out?' isout':''}${engBacker?' engbacker':''}${open}" data-name="${esc(p.name)}">
         ${anyScored && rank<=3 ? `<div class="medal m${rank}">${rank}</div>` : `<div class="rank">${anyScored?rank:"–"}</div>`}
         <div class="who">
@@ -1929,8 +1978,23 @@ window.LEAGUE_DATA = {
           <div class="bd-line">Winner pick: <b>${esc(p.winner||"—")}</b>${p.winnerWon?` — champions (+${PTS.winner})`:p.winnerEliminated?` — eliminated`:``}.</div>
         </div>
       </div>`;
-      if(idx===lastPaidIdx && idx<S.length-1){ html += `<div class="payout-cut"><span class="ln"></span><span class="tx">payout line</span><span class="ln"></span></div>`; }
+      if(!useSections && idx===lastPaidIdx && idx<S.length-1){ rowHtmls[idx] += `<div class="payout-cut"><span class="ln"></span><span class="tx">payout line</span><span class="ln"></span></div>`; }
     });
+    if(useSections){
+      const SECS=[
+        [0,"💷 IN THE HUNT","A realistic top-3 finish is still on"],
+        [1,"⚠ NEEDS A LONG SHOT","Top 3 only happens if an off-the-pace Golden Boot pick comes good"],
+        [2,"✕ OUT OF THE MONEY","Mathematically out of the top 3"]
+      ];
+      SECS.forEach(([c,t,sub])=>{
+        const idxs=S.map((_,i)=>i).filter(i=>cats[i]===c);
+        if(!idxs.length) return;
+        html += `<div class="lb-sec sec${c}"><div class="ls-t">${t} <span class="ls-n">${idxs.length}</span></div><div class="ls-s">${sub}</div></div>`;
+        idxs.forEach(i=>{ html += rowHtmls[i]; });
+      });
+    } else {
+      html += rowHtmls.join("");
+    }
     html += `</div>`;
     view.innerHTML = html;
     view.querySelectorAll(".lb-row").forEach(r=>{
