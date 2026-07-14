@@ -410,6 +410,8 @@
   body.england h2.section::after{content:" 🏴󠁧󠁢󠁥󠁮󠁧󠁿"}
   body.england .refresh{border-color:rgba(200,16,46,.6);color:#ffd9de}
   @media (prefers-reduced-motion: reduce){ .eng-marquee .mq,.eng-bunting i,.eng-banner .t1,.eng-banner .fl{animation:none} }
+  .who .meta .chip.lshot{color:#ffd9a8;border-color:rgba(230,150,60,.55);background:rgba(230,150,60,.10)}
+  .bd-line.lshot-line{color:#ffce93}
   /* Finale: champion strip, winnings chip, video modal */
   .final-strip{position:relative;overflow:hidden;text-align:center;margin:12px 0 6px;padding:16px 14px;border-radius:14px;border:1.5px solid rgba(230,184,76,.7);
     background:radial-gradient(500px 160px at 50% 0%, rgba(230,184,76,.22), transparent 70%), linear-gradient(160deg,#141824,#0A1830);
@@ -619,7 +621,7 @@ window.LEAGUE_DATA = {
        • kills any GOLDEN BOOT pick whose player is on that team (their +60 too),
          using the scorerTeam map below.
      e.g. ["Netherlands","Uruguay","Qatar"] */
-  eliminated: ["Netherlands", "France"],
+  eliminated: ["Netherlands"],
 
   /* Golden Boot pick -> their national team. Lets the app tell when a boot pick
      is dead because their country has been knocked out (e.g. Depay once the
@@ -1148,7 +1150,7 @@ window.LEAGUE_DATA = {
 
   /* ---------------- Results store ---------------- */
   // mergedResults: fixtureId -> {h,a,status,live,finished,started,source}
-  let api = { byPair:{}, scorers:{}, live:[], recent:[], upcoming:[], ok:false, attempted:false, source:"", finalDone:false, autoChampion:null };
+  let api = { byPair:{}, scorers:{}, live:[], recent:[], upcoming:[], ok:false, attempted:false, source:"", finalDone:false, autoChampion:null, autoElim:[] };
 
   /* ---------------- Permanent full-time store ----------------
      Once a match is reported FINAL by the feed, its score is written to the
@@ -1221,7 +1223,16 @@ window.LEAGUE_DATA = {
     if(a.length>=4 && b.length>=4 && (a.includes(b)||b.includes(a))) return true;
     const ta=a.split(" "), tb=b.split(" ");
     const la=ta[ta.length-1], lb=tb[tb.length-1];
-    return la.length>=4 && la===lb;
+    if(la.length<4 || la!==lb) return false;
+    // A shared surname alone is NOT a match — Lautaro Martínez is not Lisandro
+    // Martínez, Julián Álvarez is not Edson Álvarez. When both names carry a
+    // first name, the first names must agree too (an initial like "J. Álvarez"
+    // still matches "Julián Álvarez").
+    if(ta.length>1 && tb.length>1){
+      const fa=ta[0].replace(/\./g,""), fb=tb[0].replace(/\./g,"");
+      return !!fa && !!fb && fa[0]===fb[0] && (fa.startsWith(fb)||fb.startsWith(fa));
+    }
+    return true; // bare surname vs full name — accept as before
   }
 
   function parseScore(str){
@@ -1314,14 +1325,15 @@ window.LEAGUE_DATA = {
 
       // winner bonus
       const myWinnerKey = teamKey(pl.winner||"");
-      const winnerEliminated = (D.eliminated||[]).map(teamKey).includes(myWinnerKey) && myWinnerKey;
+      const elimKeys = (D.eliminated||[]).concat(api.autoElim||[]).map(teamKey);
+      const winnerEliminated = elimKeys.includes(myWinnerKey) && myWinnerKey;
       const winnerWon = champKey && myWinnerKey===champKey;
       const winnerAlive = !effChampion && pl.winner && !winnerEliminated;
 
       // golden boot bonus
       const bootTeamKey = teamKey((D.scorerTeam||{})[pl.topScorer] || "");
       const bootIsLeader = !!(pl.topScorer && leaders.some(s=>nameMatch(pl.topScorer, s.player)));
-      const bootTeamOut  = !!(pl.topScorer && bootTeamKey && (D.eliminated||[]).map(teamKey).includes(bootTeamKey));
+      const bootTeamOut  = !!(pl.topScorer && bootTeamKey && elimKeys.includes(bootTeamKey));
       // A boot pick is only DEAD if their team is out AND they are NOT the current
       // top scorer. If they still lead (or are joint-top), they can win the Golden
       // Boot even with their team eliminated, so the +60 stays live.
@@ -1346,6 +1358,7 @@ window.LEAGUE_DATA = {
         goalDiff: Math.abs(predGoals - actualGoals),
         winnerAliveScore: winnerEliminated ? 0 : (pl.winner ? 1 : 0),   // tie-break 3: champion pick still standing
         bootGoals: goalsForPick(pl.topScorer), // tie-break 4: Golden Boot pick's goals so far
+        bootRaceLead: topGoals,                // what the Golden Boot leaders are on (for the off-the-pace check)
         winnerWon, winnerAlive, winnerEliminated:!!winnerEliminated,
         bootWon, bootLeading, bootInTable, bootEliminated
       };
@@ -1392,6 +1405,18 @@ window.LEAGUE_DATA = {
         const st0=(ev.status&&ev.status.type)||{};
         const done0 = st0.state==="post" || st0.completed===true;
         const d0=(ev.date||"").slice(0,10);
+        // ---- AUTO-ELIMINATION ----
+        // Knockout football: lose and you're out. Every completed game after the
+        // group stage adds its loser to the eliminated set automatically — no
+        // more maintaining the eliminated list by hand (it still works as a
+        // manual override/top-up for anything unusual).
+        if(done0 && d0 && d0 > GROUP_END){
+          let loser=null;
+          if(H.winner===true) loser=nameOf(A);
+          else if(A.winner===true) loser=nameOf(H);
+          else if(H.score!=null && A.score!=null && H.score!=="" && A.score!=="" && +H.score!==+A.score) loser=(+H.score<+A.score)?nameOf(H):nameOf(A);
+          if(loser && !api.autoElim.includes(loser)) api.autoElim.push(loser);
+        }
         if(done0 && d0 && d0 >= (C.finalDate||"2026-07-19")){
           let champ=null;
           if(H.winner===true) champ=nameOf(H);
@@ -1504,6 +1529,7 @@ window.LEAGUE_DATA = {
     api.attempted = true;
     api.scorers = {};            // rebuild scorer tally each pull
     api.unmatched = 0; api.unmatchedTeams = [];   // feed-health diagnostics
+    api.autoElim = [];                             // re-derived from the feed each poll
     let any=false;
 
     // 1) PRIMARY: ESPN — live scores + scorers, whole tournament in one call, no key.
@@ -1702,9 +1728,25 @@ window.LEAGUE_DATA = {
         const b=best[p.name], w=worst[p.name];
         const out = prizes.length===3 && n>3 && b.rank>3;
         const maxPts = bankedOf(p) + (b.champ?PTS.winner:0) + (b.boot?PTS.topScorer:0);
+        // Boot pick "off the pace": still mathematically alive, but so far behind
+        // the Golden Boot leaders (gap >= bootLongshotGap, default 3) that the
+        // best-case finish leaning on it is a long shot. For those players we
+        // also compute a REALISTIC ceiling: their rank if the winner pick lands
+        // but the boot doesn't.
+        const gap = (p.bootRaceLead||0) - (p.bootGoals||0);
+        const longshot = !!(ownBoot(p) && (p.bootRaceLead||0)>0 && gap >= (C.bootLongshotGap||3));
+        let realRank=null, realPts=null;
+        if(longshot){
+          const rr = rankIn(ownChamp(p), null);
+          realRank = rr.findIndex(x=>x.name===p.name)+1;
+          realPts  = bankedOf(p) + (ownChamp(p)?PTS.winner:0);
+          S.forEach(q=>{ delete q._ts; });
+        }
         return { out, bestRank:b.rank, champ:b.champ, boot:b.boot, tiebreak: out && b.strictAbove<3,
                  strictAbove:b.strictAbove, tbAbove:(b.rank-1)-b.strictAbove, above:b.above, maxPts,
                  worstRank:w.rank, worstChamp:w.champ, worstBoot:w.boot, minPts:bankedOf(p),
+                 myWinner:ownChamp(p), myBoot:ownBoot(p),
+                 longshot, gap, bootGoals:p.bootGoals||0, leadGoals:p.bootRaceLead||0, realRank, realPts,
                  locked: prizes.length===3 && n>3 && w.rank<=3 };
       });
     } else {
@@ -1728,8 +1770,16 @@ window.LEAGUE_DATA = {
                             : `no further bonuses landing for anyone`;
     const worstScen = po => {
       const c=po.worstChamp, b=po.worstBoot;
-      if(c||b) return ` — if ${c?esc(c)+" win it":""}${c&&b?" and ":""}${b?esc(b)+" take the Golden Boot":""} and your picks miss`;
-      return ` — if your picks miss`;
+      const bits=[];
+      if(c) bits.push(`${esc(c)} win it${po.myWinner&&c===po.myWinner?` (your own pick)`:``}`);
+      if(b) bits.push(`${esc(b)}${po.myBoot&&b===po.myBoot?` (your own pick)`:` — not your pick —`} take the Golden Boot`);
+      const missed=[];
+      if(po.myWinner && c!==po.myWinner) missed.push(esc(po.myWinner));
+      if(po.myBoot && b!==po.myBoot) missed.push(esc(po.myBoot));
+      let out = bits.length?` — if ${bits.join(" and ")}`:``;
+      if(missed.length) out += `${bits.length?` while`:` — if`} your ${missed.join(" and ")} miss out`;
+      else if(bits.length) out += `; even with your own pick landing, others edge ahead on the tie-breakers`;
+      return out || ` — if the bonuses fall against you`;
     };
     const whyNote = po => {
       if(!po.bestRank) return "";
@@ -1768,6 +1818,7 @@ window.LEAGUE_DATA = {
       else if(prizeOut[idx].bestRank){
         const hi=ord(prizeOut[idx].bestRank), lo=ord(prizeOut[idx].worstRank), rng=prizeOut[idx].bestRank===prizeOut[idx].worstRank?hi:`${hi}–${lo}`;
         if(prizeOut[idx].locked) meta.push(`<span class="chip alive">✓ Guaranteed top 3 · ${rng}</span>`);
+        else if(prizeOut[idx].longshot && prizeOut[idx].realRank) meta.push(`<span class="chip best">Can finish ${rng}</span><span class="chip lshot">Boot off the pace · realistic ${ord(prizeOut[idx].realRank)}</span>`);
         else meta.push(`<span class="chip best">Can finish ${rng}</span>`);
       }
       const potential = (p.bootLeading?PTS.topScorer:0);
@@ -1826,6 +1877,8 @@ window.LEAGUE_DATA = {
           ${liveHtml}
           <div class="bd-line">Match points: <b>${p.mp}</b> from ${p.played} finished matches${gaps.length?` · ${gaps.join(" · ")}`:``}.</div>
           ${(!finale && !prizeOut[idx].out && prizeOut[idx].bestRank)?`<div class="bd-line">Highest possible finish: <b>${ord(prizeOut[idx].bestRank)} place</b> · max <b>${prizeOut[idx].maxPts} pts</b>${bestScenario(prizeOut[idx])}.</div>`:``}
+          ${(!finale && !prizeOut[idx].out && prizeOut[idx].longshot)?`<div class="bd-line lshot-line">⚠ That top finish leans on <b>${esc(p.topScorer)}</b>'s Golden Boot — he's on <b>${prizeOut[idx].bootGoals}</b> ${prizeOut[idx].bootGoals===1?"goal":"goals"} vs <b>${prizeOut[idx].leadGoals}</b> for the leaders with the tournament nearly done. Still possible, but a long shot.</div>
+          <div class="bd-line">Realistic ceiling (boot aside${prizeOut[idx].myWinner?`, ${esc(prizeOut[idx].myWinner)} winning it`:``}): <b>${ord(prizeOut[idx].realRank)} place</b> · <b>${prizeOut[idx].realPts} pts</b>.</div>`:``}
           ${(!finale && !prizeOut[idx].out && prizeOut[idx].bestRank && prizeOut[idx].worstRank!==prizeOut[idx].bestRank)?`<div class="bd-line">Lowest you could finish: <b>${ord(prizeOut[idx].worstRank)} place</b> · min <b>${prizeOut[idx].minPts} pts</b>${worstScen(prizeOut[idx])}.${prizeOut[idx].locked?` Either way you're <b>guaranteed a prize</b>.`:``}</div>`:``}
           ${(!finale && prizeOut[idx].out)?`<div class="bd-line out-line">✕ <b>Out of the prizes.</b> ${prizeOut[idx].bestRank?`Highest you can finish is <b>${ord(prizeOut[idx].bestRank)} place</b> (max <b>${prizeOut[idx].maxPts} pts</b>)${prizeOut[idx].tiebreak?` — you'd be level on points with those above but lose the tie-break (exact scores, then closeness to total goals)`:``}.`:`Best possible total is <b>${prizeOut[idx].cap}</b> pts and ${prizeOut[idx].above} players are already guaranteed above it.`}${(p.winnerEliminated||p.bootEliminated)?` Dead picks: ${[p.winnerEliminated?`winner ${esc(p.winner)}`:``,p.bootEliminated?`boot ${esc(p.topScorer)}`:``].filter(Boolean).join(", ")}.`:``}</div>`:``}
           ${(!finale && prizeOut[idx].bestRank)?`<div class="bd-line why">${whyNote(prizeOut[idx])}</div>`:``}
@@ -1973,7 +2026,7 @@ window.LEAGUE_DATA = {
   function renderWinner(){
     const effChampW = D.champion || (api.finalDone && api.autoChampion) || null;
     const champKey = effChampW?teamKey(effChampW):null;
-    const elim = new Set((D.eliminated||[]).map(teamKey));
+    const elim = new Set((D.eliminated||[]).concat(api.autoElim||[]).map(teamKey));
     // group players by their winner pick
     const groupsMap = {};
     (D.players||[]).forEach(p=>{
