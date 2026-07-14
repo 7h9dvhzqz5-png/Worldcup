@@ -410,6 +410,7 @@
   body.england h2.section::after{content:" 🏴󠁧󠁢󠁥󠁮󠁧󠁿"}
   body.england .refresh{border-color:rgba(200,16,46,.6);color:#ffd9de}
   @media (prefers-reduced-motion: reduce){ .eng-marquee .mq,.eng-bunting i,.eng-banner .t1,.eng-banner .fl{animation:none} }
+  .who .meta .chip.real{color:#c9f0d4;border-color:rgba(70,190,110,.5);background:rgba(70,190,110,.10)}
   .who .meta .chip.lshot{color:#ffd9a8;border-color:rgba(230,150,60,.55);background:rgba(230,150,60,.10)}
   .bd-line.lshot-line{color:#ffce93}
   /* Finale: champion strip, winnings chip, video modal */
@@ -1723,6 +1724,23 @@ window.LEAGUE_DATA = {
       champOpts.forEach(champ=>bootOpts.forEach(boot=>{
         rankIn(champ,boot).forEach((q,idx)=>{ if(idx+1 > worst[q.name].rank) worst[q.name]={rank:idx+1,champ,boot}; });
       }));
+      // REALISTIC range — same alive champions, but the Golden Boot can only go
+      // to a pick still ON the pace (within bootLongshotGap of the leaders) or
+      // to a scorer nobody picked. Off-the-pace long shots are excluded from
+      // everyone's realistic picture, top and bottom.
+      const GAPR = (C.bootLongshotGap||3);
+      const paceBootsAll = bootDecided ? [null] : [...new Set(S.filter(q=>{
+        const ob = (!bootDecided && q.topScorer && !q.bootEliminated) ? q.topScorer : null;
+        return ob && ((q.bootRaceLead||0)-(q.bootGoals||0)) < GAPR;
+      }).map(q=>q.topScorer)), null];
+      const realR={}; S.forEach(q=>realR[q.name]={best:S.length+1,worst:0});
+      champOpts.forEach(champ=>paceBootsAll.forEach(boot=>{
+        rankIn(champ,boot).forEach((q,idx)=>{
+          const r=idx+1;
+          if(r<realR[q.name].best) realR[q.name].best=r;
+          if(r>realR[q.name].worst) realR[q.name].worst=r;
+        });
+      }));
       S.forEach(q=>{ delete q._ts; });
       prizeOut = S.map(p=>{
         const b=best[p.name], w=worst[p.name];
@@ -1733,20 +1751,35 @@ window.LEAGUE_DATA = {
         // best-case finish leaning on it is a long shot. For those players we
         // also compute a REALISTIC ceiling: their rank if the winner pick lands
         // but the boot doesn't.
+        const GAPT = (C.bootLongshotGap||3);
         const gap = (p.bootRaceLead||0) - (p.bootGoals||0);
-        const longshot = !!(ownBoot(p) && (p.bootRaceLead||0)>0 && gap >= (C.bootLongshotGap||3));
-        let realRank=null, realPts=null;
+        const longshot = !!(ownBoot(p) && (p.bootRaceLead||0)>0 && gap >= GAPT);
+        let realRank=null, realWorst=null, realPts=null;
         if(longshot){
-          const rr = rankIn(ownChamp(p), null);
-          realRank = rr.findIndex(x=>x.name===p.name)+1;
-          realPts  = bankedOf(p) + (ownChamp(p)?PTS.winner:0);
+          // Realistic world: this player's own boot long shot does NOT land, but
+          // any scorer still genuinely ON the pace might — so we rank them in
+          // every plausible boot outcome (each on-pace pick landing for its
+          // backers, plus the boot going to someone nobody picked) and show the
+          // realistic RANGE, own winner pick landing throughout.
+          const paceBoots=[...new Set(S.filter(q=>{
+            return ownBoot(q) && ((q.bootRaceLead||0)-(q.bootGoals||0)) < GAPT;
+          }).map(q=>q.topScorer))];
+          let bR=Infinity, wR=0;
+          [...paceBoots, null].forEach(bb=>{
+            const rr = rankIn(ownChamp(p), bb);
+            const r = rr.findIndex(x=>x.name===p.name)+1;
+            if(r<bR) bR=r; if(r>wR) wR=r;
+          });
           S.forEach(q=>{ delete q._ts; });
+          realRank=bR; realWorst=wR;
+          realPts = bankedOf(p) + (ownChamp(p)?PTS.winner:0);
         }
         return { out, bestRank:b.rank, champ:b.champ, boot:b.boot, tiebreak: out && b.strictAbove<3,
                  strictAbove:b.strictAbove, tbAbove:(b.rank-1)-b.strictAbove, above:b.above, maxPts,
                  worstRank:w.rank, worstChamp:w.champ, worstBoot:w.boot, minPts:bankedOf(p),
                  myWinner:ownChamp(p), myBoot:ownBoot(p),
-                 longshot, gap, bootGoals:p.bootGoals||0, leadGoals:p.bootRaceLead||0, realRank, realPts,
+                 longshot, gap, bootGoals:p.bootGoals||0, leadGoals:p.bootRaceLead||0, realRank, realWorst, realPts,
+                 rBest:realR[p.name].best, rWorst:realR[p.name].worst,
                  locked: prizes.length===3 && n>3 && w.rank<=3 };
       });
     } else {
@@ -1818,8 +1851,14 @@ window.LEAGUE_DATA = {
       else if(prizeOut[idx].bestRank){
         const hi=ord(prizeOut[idx].bestRank), lo=ord(prizeOut[idx].worstRank), rng=prizeOut[idx].bestRank===prizeOut[idx].worstRank?hi:`${hi}–${lo}`;
         if(prizeOut[idx].locked) meta.push(`<span class="chip alive">✓ Guaranteed top 3 · ${rng}</span>`);
-        else if(prizeOut[idx].longshot && prizeOut[idx].realRank) meta.push(`<span class="chip best">Can finish ${rng}</span><span class="chip lshot">Boot off the pace · realistic ${ord(prizeOut[idx].realRank)}</span>`);
-        else meta.push(`<span class="chip best">Can finish ${rng}</span>`);
+        else{
+          meta.push(`<span class="chip best">Can finish ${rng}</span>`);
+          const rb=prizeOut[idx].rBest, rw=prizeOut[idx].rWorst;
+          if(rb && (rb!==prizeOut[idx].bestRank || rw!==prizeOut[idx].worstRank)){
+            meta.push(`<span class="chip real">Realistic ${ord(rb)}${rw>rb?`–${ord(rw)}`:``}</span>`);
+          }
+          if(prizeOut[idx].longshot) meta.push(`<span class="chip lshot">Boot off the pace</span>`);
+        }
       }
       const potential = (p.bootLeading?PTS.topScorer:0);
       const paid = anyScored && rank<=3 && prizes.length===3;
@@ -1877,8 +1916,9 @@ window.LEAGUE_DATA = {
           ${liveHtml}
           <div class="bd-line">Match points: <b>${p.mp}</b> from ${p.played} finished matches${gaps.length?` · ${gaps.join(" · ")}`:``}.</div>
           ${(!finale && !prizeOut[idx].out && prizeOut[idx].bestRank)?`<div class="bd-line">Highest possible finish: <b>${ord(prizeOut[idx].bestRank)} place</b> · max <b>${prizeOut[idx].maxPts} pts</b>${bestScenario(prizeOut[idx])}.</div>`:``}
+          ${(!finale && !prizeOut[idx].out && prizeOut[idx].bestRank && prizeOut[idx].rBest && (prizeOut[idx].rBest!==prizeOut[idx].bestRank||prizeOut[idx].rWorst!==prizeOut[idx].worstRank))?`<div class="bd-line">Realistic range: <b>${ord(prizeOut[idx].rBest)}${prizeOut[idx].rWorst>prizeOut[idx].rBest?`–${ord(prizeOut[idx].rWorst)}`:``} place</b> — counts only what's genuinely live: eliminated teams are out, and the Golden Boot can only go to a scorer still on the pace or someone nobody picked (off-the-pace long shots excluded for everyone).</div>`:``}
           ${(!finale && !prizeOut[idx].out && prizeOut[idx].longshot)?`<div class="bd-line lshot-line">⚠ That top finish leans on <b>${esc(p.topScorer)}</b>'s Golden Boot — he's on <b>${prizeOut[idx].bootGoals}</b> ${prizeOut[idx].bootGoals===1?"goal":"goals"} vs <b>${prizeOut[idx].leadGoals}</b> for the leaders with the tournament nearly done. Still possible, but a long shot.</div>
-          <div class="bd-line">Realistic ceiling (boot aside${prizeOut[idx].myWinner?`, ${esc(prizeOut[idx].myWinner)} winning it`:``}): <b>${ord(prizeOut[idx].realRank)} place</b> · <b>${prizeOut[idx].realPts} pts</b>.</div>`:``}
+          <div class="bd-line">Realistic finish (your boot aside${prizeOut[idx].myWinner?`, ${esc(prizeOut[idx].myWinner)} winning it`:``}): <b>${ord(prizeOut[idx].realRank)}${prizeOut[idx].realWorst>prizeOut[idx].realRank?`–${ord(prizeOut[idx].realWorst)}`:``} place</b> · <b>${prizeOut[idx].realPts} pts</b> — the range covers the Golden Boot going to any scorer still on the pace (their backers bank the +60) or to someone nobody picked.</div>`:``}
           ${(!finale && !prizeOut[idx].out && prizeOut[idx].bestRank && prizeOut[idx].worstRank!==prizeOut[idx].bestRank)?`<div class="bd-line">Lowest you could finish: <b>${ord(prizeOut[idx].worstRank)} place</b> · min <b>${prizeOut[idx].minPts} pts</b>${worstScen(prizeOut[idx])}.${prizeOut[idx].locked?` Either way you're <b>guaranteed a prize</b>.`:``}</div>`:``}
           ${(!finale && prizeOut[idx].out)?`<div class="bd-line out-line">✕ <b>Out of the prizes.</b> ${prizeOut[idx].bestRank?`Highest you can finish is <b>${ord(prizeOut[idx].bestRank)} place</b> (max <b>${prizeOut[idx].maxPts} pts</b>)${prizeOut[idx].tiebreak?` — you'd be level on points with those above but lose the tie-break (exact scores, then closeness to total goals)`:``}.`:`Best possible total is <b>${prizeOut[idx].cap}</b> pts and ${prizeOut[idx].above} players are already guaranteed above it.`}${(p.winnerEliminated||p.bootEliminated)?` Dead picks: ${[p.winnerEliminated?`winner ${esc(p.winner)}`:``,p.bootEliminated?`boot ${esc(p.topScorer)}`:``].filter(Boolean).join(", ")}.`:``}</div>`:``}
           ${(!finale && prizeOut[idx].bestRank)?`<div class="bd-line why">${whyNote(prizeOut[idx])}</div>`:``}
