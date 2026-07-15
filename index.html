@@ -2188,6 +2188,15 @@ window.LEAGUE_DATA = {
     const topGoals = scorers.reduce((m,s)=>Math.max(m,s.goals||0),0);
 
     let html = `<h2 class="section">Top Scorer race</h2><p class="section-note">Worth <b>${PTS.topScorer} points</b> to <i>every</i> entrant who picked the eventual Golden Boot (not shared). Full scoring chart below, with the backers grouped under each scorer.</p>`;
+    {
+      const elimSet0 = new Set((D.eliminated||[]).concat(api.autoElim||[]).map(teamKey));
+      const hasGame0 = team => (api.knockouts||[]).some(k => (k.live || !k.finished) && k.home && k.away && (teamKey(k.home)===teamKey(team) || teamKey(k.away)===teamKey(team)));
+      const stillPlaying = scorers.filter(sc=>sc.team && elimSet0.has(teamKey(sc.team)) && hasGame0(sc.team) && (topGoals-(sc.goals||0))<(C.bootLongshotGap||3));
+      if(!D.goldenBoot && stillPlaying.length){
+        const names=[...new Set(stillPlaying.map(sc=>sc.player))].slice(0,4).join(", ");
+        html += `<p class="section-note" style="border-left:2px solid rgba(230,150,60,.5);padding-left:10px;color:#ffce93"><b>Still wide open:</b> ${esc(names)} are out of the tournament but face off in the <b>3rd-place playoff</b>, so they can add to their tallies — the Golden Boot isn't settled yet.</p>`;
+      }
+    }
     if(D.goldenBoot){
       html += `<div class="banner gold"><div><b>Golden Boot decided:</b> ${esc(D.goldenBoot)} — ${PTS.topScorer} points awarded to everyone who picked them.</div></div>`;
     }
@@ -2199,25 +2208,34 @@ window.LEAGUE_DATA = {
       // long-shot gap of the lead) from the off-the-pace pack, which collapses.
       const GAPS=(C.bootLongshotGap||3);
       const elimSet = new Set((D.eliminated||[]).concat(api.autoElim||[]).map(teamKey));
-      const teamOut = sc => !!(sc.team && elimSet.has(teamKey(sc.team)));
+      // A team can STILL score if it has a knockout game left to play — that
+      // includes the two beaten semi-finalists, who meet in the 3rd-place game.
+      // So "done" = eliminated AND no live/upcoming knockout game remaining.
+      const teamHasGameLeft = team => (api.knockouts||[]).some(k => (k.live || !k.finished) && k.home && k.away && (teamKey(k.home)===teamKey(team) || teamKey(k.away)===teamKey(team)));
+      const teamGameLeft = sc => !!(sc.team && teamHasGameLeft(sc.team));
+      const teamDone = sc => !!(sc.team && elimSet.has(teamKey(sc.team)) && !teamGameLeft(sc));
+      const anyThird = ranked => false; // placeholder (reassigned below)
       let rank=0, prev=null;
       const ranked=scorers.map((sc,i)=>{ if(sc.goals!==prev){rank=i+1;prev=sc.goals;} return {...sc,rank}; });
-      // In the race = close enough on goals AND still able to add to their tally
-      // (team alive) — with one exception: a knocked-out player who's already
-      // (joint) top can still win the Boot on their final count, so they stay
-      // IF an entrant actually picked them (a frozen scorer nobody backed goes
-      // to the drawer — he still blocks everyone's +60 if he wins, but he's not
-      // league news).
+      // In the race = close enough on goals AND still able to add to their tally.
+      // Still able = team alive OR has a game left (e.g. the 3rd-place playoff) —
+      // with one exception for the truly done: a knocked-out player already
+      // (joint) top who an entrant picked stays, as their final count can win it.
       const isPicked = sc => (D.players||[]).some(p=>nameMatch(p.topScorer||"", sc.player));
-      const inRace = sc => D.goldenBoot ? true : ((topGoals-(sc.goals||0)) < GAPS && (!teamOut(sc) || ((sc.goals||0)===topGoals && isPicked(sc))));
+      const inRace = sc => D.goldenBoot ? true : ((topGoals-(sc.goals||0)) < GAPS && (!teamDone(sc) || ((sc.goals||0)===topGoals && isPicked(sc))));
       const rowOf = sc => {
         const lead = (sc.goals||0)===topGoals && topGoals>0;
         const won = D.goldenBoot && nameMatch(sc.player, D.goldenBoot);
         const backers = (D.players||[]).filter(p=>nameMatch(p.topScorer||"", sc.player));
+        const elimTeam = sc.team && elimSet.has(teamKey(sc.team));
+        const tag = won ? `<span class="ko" style="color:var(--gold);border-color:#5a4a2a;margin-left:6px">Golden Boot</span>`
+                  : (elimTeam && teamGameLeft(sc)) ? `<span class="ko live" style="margin-left:6px">3rd-place game to come — can still score</span>`
+                  : teamDone(sc) ? `<span class="ko" style="margin-left:6px">Out${(sc.goals||0)===topGoals&&topGoals>0?` — stuck on ${sc.goals}`:``}</span>`
+                  : ``;
         return `
         <div class="scorer${won?' won':lead?' lead':''}">
           <div class="gn">${sc.rank}</div>
-          <div class="pl">${esc(sc.player)} <span class="tm">${flag(sc.team)?flag(sc.team)+" ":""}${esc(sc.team||"")}</span>${won?`<span class="ko" style="color:var(--gold);border-color:#5a4a2a;margin-left:6px">Golden Boot</span>`:teamOut(sc)?`<span class="ko" style="margin-left:6px">Out${(sc.goals||0)===topGoals&&topGoals>0?` — stuck on ${sc.goals}`:``}</span>`:``}</div>
+          <div class="pl">${esc(sc.player)} <span class="tm">${flag(sc.team)?flag(sc.team)+" ":""}${esc(sc.team||"")}</span>${tag}</div>
           <div class="gz">${sc.goals||0}<small>goals</small></div>
         </div>
         <div class="backers">
