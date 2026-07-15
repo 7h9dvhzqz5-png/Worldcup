@@ -447,12 +447,39 @@
   #engConfetti{position:fixed;inset:0;pointer-events:none;z-index:60;overflow:hidden}
   .cf{position:absolute;top:-14px;width:9px;height:14px;border-radius:2px;opacity:.9;animation:cfFall linear infinite}
   .cf.w{background:#fff}.cf.r{background:#C8102E}
+  .cf.gold{background:#E6B84C}
   .cf.f{width:auto;height:auto;background:none;font-size:14px}
   @keyframes cfFall{
     0%{transform:translate3d(0,-4vh,0) rotate(0deg)}
     100%{transform:translate3d(var(--sway,20px),104vh,0) rotate(var(--spin,540deg))}
   }
   @media (prefers-reduced-motion: reduce){ #engConfetti{display:none} }
+  /* ================= FINAL MODE 🏆 ================= */
+  body.final{
+    --host-r:#E6B84C; --host-g:#F5D989; --host-b:#E6B84C;
+    background:radial-gradient(1200px 600px at 50% -10%, #241d0e 0%, var(--pitch) 55%) fixed, var(--pitch);
+  }
+  body.final .crest{box-shadow:0 6px 18px -6px rgba(230,184,76,.55), inset 0 1px 0 rgba(255,255,255,.14)}
+  body.final h2.section::before,
+  body.final .lb-row.leader::before,
+  body.final .pot::before{background:linear-gradient(180deg,#F5D989,#E6B84C)}
+  .final-banner{position:relative;overflow:hidden;margin:12px 0 6px;padding:16px 14px;border-radius:14px;text-align:center;
+    border:1.5px solid rgba(230,184,76,.6);
+    background:radial-gradient(500px 160px at 50% 0%, rgba(230,184,76,.20), transparent 70%), linear-gradient(160deg,#141824,#0A1830);
+    box-shadow:0 10px 30px -12px rgba(230,184,76,.4), inset 0 1px 0 rgba(255,255,255,.08)}
+  .final-banner .fb-cup{font-size:30px;line-height:1}
+  .final-banner .fb-t{font-family:'Archivo';font-weight:800;font-size:13px;letter-spacing:.16em;color:#ffe9b8;margin-top:2px}
+  .final-banner .fb-teams{display:flex;align-items:center;justify-content:center;gap:14px;margin-top:8px;flex-wrap:wrap}
+  .final-banner .fb-team{font-family:'Archivo';font-weight:800;font-size:17px}
+  .final-banner .fb-v{color:var(--muted);font-weight:700;font-size:13px}
+  .final-banner .fb-when{color:var(--muted);font-size:12px;margin-top:7px}
+  .final-banner .fb-when b{color:#ffe9b8}
+  .final-banner .fb-score{font-family:'Archivo';font-weight:800;font-size:22px;color:#ffe9b8}
+  .final-banner .fb-back{display:flex;justify-content:center;gap:16px;flex-wrap:wrap;margin-top:9px;font-size:11.5px;color:var(--muted)}
+  .final-banner .fb-back b{color:var(--ink)}
+  body.final .lb-row.finalback{border-color:rgba(230,184,76,.5)}
+  body.final .lb-row.finalback::before{content:"";position:absolute;left:0;top:0;bottom:0;width:3px;background:linear-gradient(180deg,#F5D989,#E6B84C)}
+  .chip.fin{color:#ffe9b8;border-color:rgba(230,184,76,.6);background:rgba(230,184,76,.14)}
 </style>
 </head>
 <body>
@@ -535,6 +562,12 @@ window.LEAGUE_DATA = {
                "It's coming home" banner, England-backer badge.
        false = back to the normal look (do this if... let's not think about it). */
     themeEngland: false,
+    /* ---- FINAL MODE 🏆 ----
+       true = neutral gold "THE FINAL" takeover once the two finalists are known:
+       trophy theme, both finalists shown with their backers, kickoff countdown,
+       gold confetti. Auto-derives the finalists from the feed. Turn off after
+       the final is played (the finale/champion view takes over then anyway). */
+    themeFinal: true,
     /* ---- FINALE (automatic) ----
        The app watches the live feed for the FINAL (any game on/after finalDate
        reaching full-time). When ESPN marks it finished, the site flips to the
@@ -638,7 +671,7 @@ window.LEAGUE_DATA = {
        • kills any GOLDEN BOOT pick whose player is on that team (their +60 too),
          using the scorerTeam map below.
      e.g. ["Netherlands","Uruguay","Qatar"] */
-  eliminated: ["Netherlands", "Norway"],
+  eliminated: ["Netherlands", "Norway", "England"],
 
   /* Golden Boot pick -> their national team. Lets the app tell when a boot pick
      is dead because their country has been knocked out (e.g. Depay once the
@@ -647,7 +680,10 @@ window.LEAGUE_DATA = {
     "Harry Kane":"England", "Kylian Mbappé":"France", "Ousmane Dembélé":"France",
     "Lamine Yamal":"Spain", "Raphinha":"Brazil", "Igor Thiago":"Brazil",
     "Memphis Depay":"Netherlands", "Lautaro Martínez":"Argentina",
-    "Julián Álvarez":"Argentina"
+    "Julián Álvarez":"Argentina",
+    "Lionel Messi":"Argentina", "Erling Haaland":"Norway", "Jude Bellingham":"England",
+    "Vinícius Júnior":"Brazil", "Cristiano Ronaldo":"Portugal", "Mikel Oyarzabal":"Spain",
+    "Bukayo Saka":"England", "Nico Williams":"Spain"
   },
 
   // Reference only — do not reorder. The 72 group matches in sheet order.
@@ -1205,7 +1241,10 @@ window.LEAGUE_DATA = {
   function logGoal(sig, name, team){
     if(!sig || !name) return;
     const prev = goalLog[sig];
-    if(!prev || prev.name!==name || prev.team!==team){ goalLog[sig] = {name, team:team||""}; goalLogDirty = true; }
+    // Backfill: if we already had this goal but without a team, and a team turns
+    // up on a later poll, fill it in — but never overwrite a known team with a blank.
+    const keepTeam = team || (prev && prev.team) || "";
+    if(!prev || prev.name!==name || prev.team!==keepTeam){ goalLog[sig] = {name, team:keepTeam}; goalLogDirty = true; }
   }
   function goalSave(){
     if(!goalLogDirty) return;
@@ -1214,10 +1253,13 @@ window.LEAGUE_DATA = {
   // Tally goals per player from the permanent log (one count per unique scoring play).
   function tallyGoals(){
     const t = {};
+    const ST = D.scorerTeam||{};
+    const lookup = nm => { if(ST[nm]) return ST[nm]; const k=Object.keys(ST).find(x=>nameMatch(x,nm)); return k?ST[k]:""; };
     for(const sig in goalLog){
       const g = goalLog[sig]; if(!g || !g.name) continue;
       const e = t[g.name] || (t[g.name] = {team:g.team||"", goals:0});
       e.goals++; if(g.team && !e.team) e.team = g.team;
+      if(!e.team){ e.team = lookup(g.name); }   // fallback for goals logged before team-resolution
     }
     return t;
   }
@@ -1488,19 +1530,33 @@ window.LEAGUE_DATA = {
       // goal scorers (when present on the scoreboard feed) — recorded for the WHOLE
       // tournament (group + knockouts) into the permanent log, so the Golden Boot
       // race is always complete even if the feed later drops old games' details.
+      // Build a team lookup for THIS match so a goal detail that only references
+      // its team by id/abbreviation can still be resolved to a country name.
+      const teamById = {};
+      const addTeam = c => { if(!c) return; const t=c.team||c; const nm=(t&&(t.displayName||t.name))||""; if(!nm) return;
+        if(t.id!=null) teamById[String(t.id)]=nm; if(c.id!=null) teamById[String(c.id)]=nm;
+        if(t.abbreviation) teamById[String(t.abbreviation).toUpperCase()]=nm; if(t.uid) teamById[String(t.uid)]=nm; };
+      addTeam(H); addTeam(A);
+      const resolveTeam = (a,d) => {
+        const at=a&&a.team;
+        return (at&&(at.displayName||at.name)) ||
+               (at&&at.id!=null&&teamById[String(at.id)]) ||
+               (at&&at.abbreviation&&teamById[String(at.abbreviation).toUpperCase()]) ||
+               (d&&d.team&&(d.team.displayName||d.team.name)) ||
+               (d&&d.team&&d.team.id!=null&&teamById[String(d.team.id)]) ||
+               (d&&d.team&&teamById[String(d.team)]) ||
+               (a&&a.teamId!=null&&teamById[String(a.teamId)]) || "";
+      };
       (comp.details||[]).forEach((d,di)=>{
         const txt = ((d.type&&d.type.text)||"").toLowerCase();
         const isGoal = d.scoringPlay===true || /goal/.test(txt);
         const ownGoal = /own goal/.test(txt);
-        // Penalty SHOOTOUT goals don't count toward the Golden Boot (FIFA rules).
-        // In-play penalties still do — only exclude shootout kicks.
         const periodTxt = ((d.period&&(d.period.displayValue||d.period.type))||"").toLowerCase();
         const shootout = d.shootout===true || /shootout/.test(txt) || /shootout/.test(periodTxt);
         if(!isGoal || ownGoal || shootout) return;
         (d.athletesInvolved||[]).slice(0,1).forEach(a=>{
           const nm=a.displayName||a.shortName; if(!nm) return;
-          const teamNm = (a.team&&(a.team.displayName||a.team.abbreviation))||"";
-          logGoal(ev.id+"|"+di, nm, teamNm);   // unique per scoring play, across refetches
+          logGoal(ev.id+"|"+di, nm, resolveTeam(a,d));   // unique per scoring play, across refetches
         });
       });
       used=true;
@@ -1670,6 +1726,30 @@ window.LEAGUE_DATA = {
 
   function renderBanners(){
     const b=$("#banners"); b.innerHTML="";
+    if(C.themeFinal){
+      // Derive the two finalists from the feed: the knockout game on/after
+      // finalDate. Falls back to a gentle "awaiting finalists" note.
+      const ko=(api.knockouts||[]).slice().sort((x,y)=>(x.kick||x.date||"").localeCompare(y.kick||y.date||""));
+      const fin=(C.finalDate||"2026-07-19");
+      const F = ko.find(k=>k.date && k.date>=fin) || null;
+      const kfmt = d=>{ if(!/^\d{4}-\d{2}-\d{2}/.test(d||"")) return d||""; return new Date(d.slice(0,10)+"T12:00:00Z").toLocaleDateString("en-GB",{weekday:"long",day:"numeric",month:"long"}); };
+      const backersOf = team => (D.players||[]).filter(p=>p.winner && teamKey(p.winner)===teamKey(team)).map(p=>p.name);
+      if(F){
+        const nb=backersOf(F.home).length, nb2=backersOf(F.away).length;
+        const mid = F.finished ? `<div class="fb-score">${F.h} – ${F.a}</div>`
+                  : F.live ? `<div class="fb-score">${F.h ?? 0} – ${F.a ?? 0} <span style="font-size:11px;color:#8fd39f">● LIVE</span></div>`
+                  : `<span class="fb-v">v</span>`;
+        b.insertAdjacentHTML("beforeend",`<div class="final-banner">
+          <div class="fb-cup">🏆</div>
+          <div class="fb-t">THE WORLD CUP FINAL</div>
+          <div class="fb-teams"><span class="fb-team">${fteam(F.home,false)}</span>${mid}<span class="fb-team">${fteam(F.away,true)}</span></div>
+          <div class="fb-when">${F.finished?`<b>Full-time</b> — champions crowned`:F.live?`<b>Live now</b>`:`<b>${kfmt(F.date)}</b> — winner takes the +${PTS.winner}`}</div>
+          <div class="fb-back"><span><b>${nb}</b> backing ${esc(F.home)}</span><span><b>${nb2}</b> backing ${esc(F.away)}</span></div>
+        </div>`);
+      } else {
+        b.insertAdjacentHTML("beforeend",`<div class="final-banner"><div class="fb-cup">🏆</div><div class="fb-t">THE FINAL AWAITS</div><div class="fb-when">The two finalists will appear here as soon as the semis are settled.</div></div>`);
+      }
+    }
     if(C.themeEngland){
       b.insertAdjacentHTML("beforeend",`<div class="eng-banner"><span class="fl">🏴󠁧󠁢󠁥󠁮󠁧󠁿</span><div style="flex:1;min-width:0"><div class="t1">IT'S COMING HOME</div><div class="t2">England are in the World Cup <b>SEMI-FINAL</b>. Nobody is calm. COME ON ENGLAND! 🦁🦁🦁⚽🍺</div></div><span class="fl">🏴󠁧󠁢󠁥󠁮󠁧󠁿</span></div>`);
     }
@@ -1895,7 +1975,9 @@ window.LEAGUE_DATA = {
       const open = openRows.has(p.name) ? " open":"";
       const meta=[];
       const engBacker = !!(C.themeEngland && p.winner==="England" && !p.winnerEliminated);
+      const finBacker = !!(C.themeFinal && p.winner && !p.winnerEliminated && (api.knockouts||[]).some(k=>k.date && k.date>=(C.finalDate||"2026-07-19") && (teamKey(k.home)===teamKey(p.winner)||teamKey(k.away)===teamKey(p.winner))));
       if(engBacker) meta.push(`<span class="chip eng">👑 ENGLAND'S MAN 🦁🦁🦁 HE BELIEVED WHEN NOBODY ELSE DID</span>`);
+      if(finBacker) meta.push(`<span class="chip fin">🏆 In the final — ${fteam(p.winner,true)}</span>`);
       // Won bonuses always earn a gold chip
       if(p.bootWon) meta.push(`<span class="chip alive">◆ Golden Boot (+${PTS.topScorer})</span>`);
       if(p.winnerWon) meta.push(`<span class="chip alive">★ Champion (+${PTS.winner})</span>`);
@@ -1971,7 +2053,7 @@ window.LEAGUE_DATA = {
       const sp = sparkline(hist.spark[p.name]||[], n);
 
       rowHtmls[idx] = `
-      <div class="lb-row${leader?' leader':''}${isMe?' me':''}${prizeOut[idx].out?' isout':''}${engBacker?' engbacker':''}${open}" data-name="${esc(p.name)}">
+      <div class="lb-row${leader?' leader':''}${isMe?' me':''}${prizeOut[idx].out?' isout':''}${engBacker?' engbacker':''}${finBacker?' finalback':''}${open}" data-name="${esc(p.name)}">
         ${anyScored && rank<=3 ? `<div class="medal m${rank}">${rank}</div>` : `<div class="rank">${anyScored?rank:"–"}</div>`}
         <div class="who">
           <div class="nm">${esc(p.name)} ${mvHtml}${isMe?`<span class="you-tag">YOU</span>`:``}</div>
@@ -2434,6 +2516,32 @@ window.LEAGUE_DATA = {
   };
   $("#title").textContent = C.title||"World Cup 2026";
   $("#subtitle").textContent = C.subtitle||"Prediction League";
+
+  /* ---- Final mode 🏆 (neutral gold takeover once finalists are known) ---- */
+  if(C.themeFinal){
+    document.body.classList.add("final");
+    $("#subtitle").textContent = (C.title||"World Cup 26") + " Prediction League · THE FINAL 🏆";
+    try{
+      if(!(window.matchMedia && matchMedia("(prefers-reduced-motion: reduce)").matches)){
+        const holder=document.createElement("div"); holder.id="engConfetti";
+        const N = (window.innerWidth||800) < 480 ? 44 : 66;
+        let bits="";
+        for(let i=0;i<N;i++){
+          const emo = i%11===0 ? "🏆" : "";
+          const cls = emo ? "cf f" : (i%2 ? "cf gold" : "cf w");
+          const left=(Math.random()*100).toFixed(2);
+          const dur=(6+Math.random()*7).toFixed(2);
+          const delay=(-Math.random()*13).toFixed(2);
+          const sway=((Math.random()*120)-60).toFixed(0)+"px";
+          const spin=(360+Math.random()*540).toFixed(0)+"deg";
+          const scale=(0.7+Math.random()*0.8).toFixed(2);
+          bits+=`<span class="${cls}" style="left:${left}%;animation-duration:${dur}s;animation-delay:${delay}s;--sway:${sway};--spin:${spin};transform:scale(${scale})">${emo}</span>`;
+        }
+        holder.innerHTML=bits;
+        document.body.appendChild(holder);
+      }
+    }catch(e){}
+  }
 
   /* ---- England semi-final takeover 🏴󠁧󠁢󠁥󠁮󠁧󠁿 ---- */
   if(C.themeEngland){
