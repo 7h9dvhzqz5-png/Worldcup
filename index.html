@@ -2116,9 +2116,14 @@ window.LEAGUE_DATA = {
       // Rank everyone first (ties share), then split the LIVE RACE (within the
       // long-shot gap of the lead) from the off-the-pace pack, which collapses.
       const GAPS=(C.bootLongshotGap||3);
+      const elimSet = new Set((D.eliminated||[]).concat(api.autoElim||[]).map(teamKey));
+      const teamOut = sc => !!(sc.team && elimSet.has(teamKey(sc.team)));
       let rank=0, prev=null;
       const ranked=scorers.map((sc,i)=>{ if(sc.goals!==prev){rank=i+1;prev=sc.goals;} return {...sc,rank}; });
-      const inRace = sc => D.goldenBoot ? true : (topGoals-(sc.goals||0)) < GAPS;
+      // In the race = close enough on goals AND still able to add to their tally
+      // (team alive) — with one exception: a knocked-out player who's already
+      // (joint) top can still win the Boot on their final count, so they stay.
+      const inRace = sc => D.goldenBoot ? true : ((topGoals-(sc.goals||0)) < GAPS && (!teamOut(sc) || (sc.goals||0)===topGoals));
       const rowOf = sc => {
         const lead = (sc.goals||0)===topGoals && topGoals>0;
         const won = D.goldenBoot && nameMatch(sc.player, D.goldenBoot);
@@ -2126,7 +2131,7 @@ window.LEAGUE_DATA = {
         return `
         <div class="scorer${won?' won':lead?' lead':''}">
           <div class="gn">${sc.rank}</div>
-          <div class="pl">${esc(sc.player)} <span class="tm">${flag(sc.team)?flag(sc.team)+" ":""}${esc(sc.team||"")}</span>${won?`<span class="ko" style="color:var(--gold);border-color:#5a4a2a;margin-left:6px">Golden Boot</span>`:``}</div>
+          <div class="pl">${esc(sc.player)} <span class="tm">${flag(sc.team)?flag(sc.team)+" ":""}${esc(sc.team||"")}</span>${won?`<span class="ko" style="color:var(--gold);border-color:#5a4a2a;margin-left:6px">Golden Boot</span>`:teamOut(sc)?`<span class="ko" style="margin-left:6px">Out${(sc.goals||0)===topGoals&&topGoals>0?` — stuck on ${sc.goals}`:``}</span>`:``}</div>
           <div class="gz">${sc.goals||0}<small>goals</small></div>
         </div>
         <div class="backers">
@@ -2138,7 +2143,7 @@ window.LEAGUE_DATA = {
       race.forEach(sc=>{ html += rowOf(sc); });
       html += `</div>`;
       if(pack.length){
-        html += `<details class="arch"><summary>Off the pace — ${pack.length} more scorer${pack.length===1?"":"s"} (${GAPS}+ goals behind)</summary><div class="panel">`;
+        html += `<details class="arch"><summary>Out of the race — ${pack.length} more scorer${pack.length===1?"":"s"} (too far behind, or knocked out and can't add to their tally)</summary><div class="panel">`;
         pack.forEach(sc=>{ html += rowOf(sc); });
         html += `</div>`;
       }
