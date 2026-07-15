@@ -419,6 +419,13 @@
   .lb-sec.sec1 .ls-t{color:#ffd9a8}
   .lb-sec.sec2{border-color:rgba(217,138,140,.4);background:rgba(217,138,140,.05)}
   .lb-sec.sec2 .ls-t{color:#d98a8c}
+  details.arch{margin:12px 0 0}
+  details.arch>summary{cursor:pointer;list-style:none;padding:9px 12px;border:1px solid var(--line);border-radius:10px;background:rgba(255,255,255,.03);color:var(--muted);font-size:12px;font-family:'Archivo';font-weight:700}
+  details.arch>summary::before{content:"▸ ";color:var(--faint)}
+  details.arch[open]>summary::before{content:"▾ "}
+  details.arch>summary::-webkit-details-marker{display:none}
+  details.arch[open]>summary{margin-bottom:8px}
+  .who .meta .chip.dim{opacity:.55;text-decoration:line-through;text-decoration-thickness:1px}
   .who .meta .chip.real{color:#c9f0d4;border-color:rgba(70,190,110,.5);background:rgba(70,190,110,.10)}
   .who .meta .chip.lshot{color:#ffd9a8;border-color:rgba(230,150,60,.55);background:rgba(230,150,60,.10)}
   .bd-line.lshot-line{color:#ffce93}
@@ -1691,11 +1698,16 @@ window.LEAGUE_DATA = {
     D.fixtures.forEach(f=>{ const r=results[f.id]; if(r&&r.finished) gFin++; else if(r&&r.live) gLive++; });
     const gTotal = D.fixtures.length, gLeft = gTotal - gFin - gLive;
 
-    let html = `<h2 class="section">Scoreboard</h2><p class="section-note">Tap a row for the points breakdown. ${PTS.exact} exact · ${PTS.resultOne} result + a score · ${PTS.resultOnly} result · ${PTS.winner} winner · ${PTS.topScorer} top scorer. Live matches count at the current score. Ties broken by most exact scores, then closest to total goals, then how the bonus picks are doing.</p>`;
-    html += `<div class="progress">
+    const groupDone = gTotal>0 && gFin===gTotal;
+    let html = `<h2 class="section">Scoreboard</h2><p class="section-note">${groupDone
+      ? `Group scoring done &amp; dusted — only the bonuses are left: <b>+${PTS.winner}</b> winner · <b>+${PTS.topScorer}</b> top scorer, never shared. Ties: most exact scores → closest total goals → bonus picks.`
+      : `Tap a row for the points breakdown. ${PTS.exact} exact · ${PTS.resultOne} result + a score · ${PTS.resultOnly} result · ${PTS.winner} winner · ${PTS.topScorer} top scorer. Live matches count at the current score. Ties broken by most exact scores, then closest to total goals, then how the bonus picks are doing.`}</p>`;
+    if(!groupDone){
+      html += `<div class="progress">
         <div class="pgline"><span class="pgfill" style="width:${gTotal?((gFin+gLive)/gTotal*100).toFixed(1):0}%"></span></div>
         <div class="pgstats"><b>${gFin}</b> played${gLive?` · <b class="pglive">${gLive}</b> live`:``} · <b>${gLeft}</b> to play <span class="pgof">of ${gTotal}</span></div>
       </div>`;
+    }
     html += `<div class="panel">`;
     if(!S.length){ html += `<div class="empty">No entrants yet. Add your mates in the data block (search for <code>players:</code>).</div></div>`; view.innerHTML=html; return; }
     if(prizes.length===3){
@@ -1902,6 +1914,16 @@ window.LEAGUE_DATA = {
             const b = useR?prizeOut[idx].rBest:prizeOut[idx].bestRank, w = useR?prizeOut[idx].rWorst:prizeOut[idx].worstRank;
             meta.push(`<span class="chip best">Finish ${ord(b)}${w>b?`–${ord(w)}`:``}</span>`);
           }
+          // picks at a glance (back by popular demand)
+          if(!p.winnerWon){
+            if(p.winnerEliminated) meta.push(`<span class="chip dim">Winner: ${fteam(p.winner,true)} ✕</span>`);
+            else if(p.winnerAlive) meta.push(`<span class="chip">Winner: ${fteam(p.winner,true)}</span>`);
+          }
+          if(!p.bootWon && p.topScorer){
+            if(p.bootEliminated) meta.push(`<span class="chip dim">Boot: ${esc(p.topScorer)} ✕</span>`);
+            else if(p.bootLeading) meta.push(`<span class="chip alive">◆ Boot: ${esc(p.topScorer)} leading</span>`);
+            else meta.push(`<span class="chip">Boot: ${esc(p.topScorer)}</span>`);
+          }
         } else {
           if(p.bootEliminated) meta.push(`<span class="chip">Boot pick out</span>`);
           else if(p.bootLeading) meta.push(`<span class="chip alive">◆ Boot pick leading</span>`);
@@ -1977,7 +1999,7 @@ window.LEAGUE_DATA = {
           ${(!finale && !prizeOut[idx].out && prizeOut[idx].bestRank && prizeOut[idx].worstRank!==prizeOut[idx].bestRank)?`<div class="bd-line">Lowest you could finish: <b>${ord(prizeOut[idx].worstRank)} place</b> · min <b>${prizeOut[idx].minPts} pts</b>${worstScen(prizeOut[idx])}.${prizeOut[idx].locked?` Either way you're <b>guaranteed a prize</b>.`:``}</div>`:``}
           ${(!finale && prizeOut[idx].out)?`<div class="bd-line out-line">✕ <b>Out of the prizes.</b> ${prizeOut[idx].bestRank?`Highest you can finish is <b>${ord(prizeOut[idx].bestRank)} place</b> (max <b>${prizeOut[idx].maxPts} pts</b>)${prizeOut[idx].tiebreak?` — you'd be level on points with those above but lose the tie-break (exact scores, then closeness to total goals)`:``}.`:`Best possible total is <b>${prizeOut[idx].cap}</b> pts and ${prizeOut[idx].above} players are already guaranteed above it.`}${(p.winnerEliminated||p.bootEliminated)?` Dead picks: ${[p.winnerEliminated?`winner ${esc(p.winner)}`:``,p.bootEliminated?`boot ${esc(p.topScorer)}`:``].filter(Boolean).join(", ")}.`:``}</div>`:``}
           ${(!finale && prizeOut[idx].bestRank)?`<div class="bd-line why">${whyNote(prizeOut[idx])}</div>`:``}
-          ${(sp||formHtml)?`<div class="bd-line trend">${sp?`<span class="trend-l">Rank trend</span> ${sp}`:``}${formHtml}</div>`:``}
+          ${((!groupDone||finale) && (sp||formHtml))?`<div class="bd-line trend">${sp?`<span class="trend-l">Rank trend</span> ${sp}`:``}${formHtml}</div>`:``}
           ${p.liveCount?`<div class="bd-line">In play: <b style="color:var(--live)">+${p.liveMp}</b> from ${p.liveCount} live ${p.liveCount===1?"match":"matches"} at the current score — moves with every goal, locks at full time.</div>`:``}
           ${anyScored?`<div class="bd-line">Tiebreakers: <b>${p.correct}</b> exact ${p.correct===1?"score":"scores"} · predicted <b>${p.predGoals}</b> goals vs <b>${actualGoals}</b> actual (${p.goalDiff} off) · boot pick <b>${p.bootGoals}</b> ${p.bootGoals===1?"goal":"goals"}.</div>`:``}
           <div class="bd-line">Top scorer pick: <b>${esc(p.topScorer||"—")}</b>${p.bootWon?` — won (+${PTS.topScorer})`:p.bootEliminated?` — out (team eliminated)`:p.bootLeading?` — currently leading`:p.bootInTable?` — on the scoresheet`:``}.</div>
@@ -2091,25 +2113,37 @@ window.LEAGUE_DATA = {
     if(!scorers.length){
       html += `<div class="empty">No goals logged yet. They appear automatically once matches kick off (whole tournament), or set <code>topScorers</code> in the data block to override.</div>`;
     } else {
+      // Rank everyone first (ties share), then split the LIVE RACE (within the
+      // long-shot gap of the lead) from the off-the-pace pack, which collapses.
+      const GAPS=(C.bootLongshotGap||3);
       let rank=0, prev=null;
-      scorers.forEach((s,i)=>{
-        if(s.goals!==prev){ rank=i+1; prev=s.goals; }                 // ties share a rank
-        const lead = (s.goals||0)===topGoals && topGoals>0;
-        const won = D.goldenBoot && nameMatch(s.player, D.goldenBoot);
-        const backers = (D.players||[]).filter(p=>nameMatch(p.topScorer||"", s.player));
-        html += `
+      const ranked=scorers.map((sc,i)=>{ if(sc.goals!==prev){rank=i+1;prev=sc.goals;} return {...sc,rank}; });
+      const inRace = sc => D.goldenBoot ? true : (topGoals-(sc.goals||0)) < GAPS;
+      const rowOf = sc => {
+        const lead = (sc.goals||0)===topGoals && topGoals>0;
+        const won = D.goldenBoot && nameMatch(sc.player, D.goldenBoot);
+        const backers = (D.players||[]).filter(p=>nameMatch(p.topScorer||"", sc.player));
+        return `
         <div class="scorer${won?' won':lead?' lead':''}">
-          <div class="gn">${rank}</div>
-          <div class="pl">${esc(s.player)} <span class="tm">${flag(s.team)?flag(s.team)+" ":""}${esc(s.team||"")}</span>${won?`<span class="ko" style="color:var(--gold);border-color:#5a4a2a;margin-left:6px">Golden Boot</span>`:``}</div>
-          <div class="gz">${s.goals||0}<small>goals</small></div>
+          <div class="gn">${sc.rank}</div>
+          <div class="pl">${esc(sc.player)} <span class="tm">${flag(sc.team)?flag(sc.team)+" ":""}${esc(sc.team||"")}</span>${won?`<span class="ko" style="color:var(--gold);border-color:#5a4a2a;margin-left:6px">Golden Boot</span>`:``}</div>
+          <div class="gz">${sc.goals||0}<small>goals</small></div>
         </div>
         <div class="backers">
           ${backers.length ? `<span class="lbl">Backers (${backers.length}):</span>` + backers.map(b=>`<span class="tagp">${esc(b.name)}</span>`).join("")
-                           : `<span class="tagp none">no entrant picked ${esc(s.player)}</span>`}
+                           : `<span class="tagp none">no entrant picked ${esc(sc.player)}</span>`}
         </div>`;
-      });
+      };
+      const race=ranked.filter(inRace), pack=ranked.filter(sc=>!inRace(sc));
+      race.forEach(sc=>{ html += rowOf(sc); });
+      html += `</div>`;
+      if(pack.length){
+        html += `<details class="arch"><summary>Off the pace — ${pack.length} more scorer${pack.length===1?"":"s"} (${GAPS}+ goals behind)</summary><div class="panel">`;
+        pack.forEach(sc=>{ html += rowOf(sc); });
+        html += `</div>`;
+      }
     }
-    html += `</div>`;
+    if(scorers.length===0) html += `</div>`;
 
     // entrants whose pick hasn't scored yet — GROUPED by pick (one row per player)
     const yetMap = {};
@@ -2119,6 +2153,7 @@ window.LEAGUE_DATA = {
       (yetMap[p.topScorer]=yetMap[p.topScorer]||[]).push(p.name);
     });
     const yet = Object.entries(yetMap).sort((a,b)=>b[1].length-a[1].length || a[0].localeCompare(b[0]));
+    const packOpen = /<details class="arch"><summary>Off the pace/.test(html);
     if(yet.length){
       html += `<div class="panel" style="margin-top:14px"><div class="race-head"><span class="h">Picks yet to score</span><span class="pp">${yet.length} ${yet.length===1?"player":"players"}</span></div>`;
       yet.forEach(([pick,names])=>{
@@ -2130,6 +2165,7 @@ window.LEAGUE_DATA = {
       });
       html += `</div>`;
     }
+    if(packOpen) html += `</details>`;
     view.innerHTML = html;
   }
 
@@ -2148,18 +2184,27 @@ window.LEAGUE_DATA = {
     if(D.champion){
       html += `<div class="banner gold"><div><b>Champions:</b> ${esc(D.champion)} — ${PTS.winner} points awarded.</div></div>`;
     }
-    html += `<div class="panel">`;
-    entries.forEach(([team,names])=>{
+    const groupHtml = ([team,names])=>{
       const k=teamKey(team);
       const isChamp = champKey && k===champKey;
       const isOut = elim.has(k);
-      html += `
+      return `
       <div class="pickgroup${isOut?' out':''}${isChamp?' champ':''}">
         <div class="tt">${fteam(team,true)} ${isChamp?`<span class="ko" style="color:var(--gold);border-color:#5a4a2a">Champions</span>`:isOut?`<span class="ko">Out</span>`:``}<span class="cnt">${names.length}</span></div>
         <div class="names">${names.map(n=>`<span>${esc(n)}</span>`).join(" · ")}</div>
       </div>`;
-    });
+    };
+    const aliveE = entries.filter(([t])=>!elim.has(teamKey(t)));
+    const outE   = entries.filter(([t])=> elim.has(teamKey(t)));
+    html += `<div class="panel">`;
+    aliveE.forEach(e=>{ html += groupHtml(e); });
+    if(!aliveE.length) html += `<div class="empty">No picked teams left standing.</div>`;
     html += `</div>`;
+    if(outE.length){
+      html += `<details class="arch"><summary>Out of the running — ${outE.length} team${outE.length===1?"":"s"}</summary><div class="panel">`;
+      outE.forEach(e=>{ html += groupHtml(e); });
+      html += `</div></details>`;
+    }
     view.innerHTML = html;
   }
 
@@ -2173,8 +2218,37 @@ window.LEAGUE_DATA = {
     const results = buildResults();
     const today = new Date().toISOString().slice(0,10);
     const segs = [["all","All"],["live","Live"],["ft","Finished"],["up","To come"]];
-    let html = `<h2 class="section">Fixtures &amp; Results</h2><p class="section-note">All 72 group matches in the order they're played. Tap a match to see everyone's prediction. Results fill in at full time.</p>
-      <div class="panel"><div class="seg">${segs.map(([k,l])=>`<button data-seg="${k}" class="${fixtureFilter===k?'on':''}">${l}</button>`).join("")}</div>`;
+    const ko=(api.knockouts||[]).slice().sort((x,y)=>(x.kick||x.date||"").localeCompare(y.kick||y.date||""));
+    const koMode = ko.length>0;
+    let html = `<h2 class="section">${koMode?`Knockout rounds`:`Fixtures &amp; Results`}</h2><p class="section-note">${koMode?`Straight knockout — win or go home. Each game shows who's backing the teams with their winner pick.`:`All 72 group matches in the order they're played. Tap a match to see everyone's prediction. Results fill in at full time.`}</p>`;
+    if(koMode){
+      const roundLabel = d=>{
+        const fin=C.finalDate||"2026-07-19";
+        const days=Math.round((new Date(fin+"T12:00Z")-new Date((d||fin)+"T12:00Z"))/86400000);
+        return days<=0?"FINAL":days===1?"3RD PLACE":days<=5?"SEMI-FINAL":days<=9?"QUARTER-FINAL":days<=13?"ROUND OF 16":"ROUND OF 32";
+      };
+      const kfmt = d=>{ if(!/^\d{4}-\d{2}-\d{2}/.test(d||"")) return d||""; return new Date(d.slice(0,10)+"T12:00:00Z").toLocaleDateString("en-GB",{weekday:"long",day:"numeric",month:"long"}); };
+      const backersOf = team => (D.players||[]).filter(p=>p.winner && teamKey(p.winner)===teamKey(team)).map(p=>p.name);
+      html += `<div class="panel">`;
+      ko.forEach(k=>{
+        const st = k.live?`<div class="st live">Live</div>`:k.finished?`<div class="st ft">FT</div>`:``;
+        const score = (k.h!=null&&k.a!=null)?`${k.h} – ${k.a}`:`<span class="v">v</span>`;
+        const bh=backersOf(k.home), ba=backersOf(k.away);
+        html += `<div class="grp-h">${roundLabel(k.date)} · ${kfmt(k.date)}</div>
+        <div class="fxwrap${k.live?' islive':''}">
+          <div class="fx">
+            <div class="t1">${fteam(k.home,false)}</div>
+            <div class="mid"><div class="res">${score}</div>${st}</div>
+            <div class="t2">${fteam(k.away,true)}</div>
+          </div>
+        </div>
+        <div class="backers">${bh.length?`<span class="lbl">Backing ${esc(k.home)} (${bh.length}):</span>`+bh.map(n=>`<span class="tagp">${esc(n)}</span>`).join(""):`<span class="tagp none">nobody backed ${esc(k.home)}</span>`}</div>
+        <div class="backers">${ba.length?`<span class="lbl">Backing ${esc(k.away)} (${ba.length}):</span>`+ba.map(n=>`<span class="tagp">${esc(n)}</span>`).join(""):`<span class="tagp none">nobody backed ${esc(k.away)}</span>`}</div>`;
+      });
+      html += `</div>`;
+      html += `<details class="arch"><summary>Group stage archive — all 72 matches &amp; predictions</summary>`;
+    }
+    html += `<div class="panel"><div class="seg">${segs.map(([k,l])=>`<button data-seg="${k}" class="${fixtureFilter===k?'on':''}">${l}</button>`).join("")}</div>`;
 
     const fxRow = (f,i,r)=>{
       const fin=r&&r.finished, live=r&&r.live;
@@ -2223,6 +2297,7 @@ window.LEAGUE_DATA = {
     if(fixtureFilter==="live"){ if(!liveList.length) html+=`<div class="empty">No live matches right now.</div>`; }
     else if(!shown) html+=`<div class="empty">Nothing here yet.</div>`;
     html += `</div>`;
+    if(koMode) html += `</details>`;
     view.innerHTML = html;
     view.querySelectorAll("[data-seg]").forEach(btn=>btn.addEventListener("click",()=>{fixtureFilter=btn.getAttribute("data-seg");renderFixtures();}));
     view.querySelectorAll(".fxwrap").forEach(w=>w.addEventListener("click",()=>{
