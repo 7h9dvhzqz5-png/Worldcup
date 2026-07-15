@@ -2122,8 +2122,12 @@ window.LEAGUE_DATA = {
       const ranked=scorers.map((sc,i)=>{ if(sc.goals!==prev){rank=i+1;prev=sc.goals;} return {...sc,rank}; });
       // In the race = close enough on goals AND still able to add to their tally
       // (team alive) — with one exception: a knocked-out player who's already
-      // (joint) top can still win the Boot on their final count, so they stay.
-      const inRace = sc => D.goldenBoot ? true : ((topGoals-(sc.goals||0)) < GAPS && (!teamOut(sc) || (sc.goals||0)===topGoals));
+      // (joint) top can still win the Boot on their final count, so they stay
+      // IF an entrant actually picked them (a frozen scorer nobody backed goes
+      // to the drawer — he still blocks everyone's +60 if he wins, but he's not
+      // league news).
+      const isPicked = sc => (D.players||[]).some(p=>nameMatch(p.topScorer||"", sc.player));
+      const inRace = sc => D.goldenBoot ? true : ((topGoals-(sc.goals||0)) < GAPS && (!teamOut(sc) || ((sc.goals||0)===topGoals && isPicked(sc))));
       const rowOf = sc => {
         const lead = (sc.goals||0)===topGoals && topGoals>0;
         const won = D.goldenBoot && nameMatch(sc.player, D.goldenBoot);
