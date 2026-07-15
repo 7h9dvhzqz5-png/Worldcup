@@ -175,8 +175,7 @@
   .lb-row.isout.me{opacity:1}
   .bd-line.out-line{color:#d98a8c}
   .bd-line.why{color:var(--muted);font-size:11.5px;line-height:1.55;border-left:2px solid var(--line);padding-left:10px;margin-top:8px}
-  .tap-hint{display:flex;gap:8px;align-items:flex-start;margin:0 0 4px;padding:10px 13px;border:1px solid rgba(61,123,255,.28);background:rgba(61,123,255,.06);border-radius:11px;color:#cfe0ff;font-size:12.5px;line-height:1.45}
-  .tap-hint::before{content:"›";font-family:var(--mono);font-weight:700;color:var(--host-b);font-size:15px;line-height:1.1}
+  .tap-hint{margin:0 0 2px;padding:6px 2px;color:var(--muted);font-size:11.5px;line-height:1.4}
   .who .meta .chip.best{color:#cfe0ff;border-color:rgba(61,123,255,.4);background:rgba(61,123,255,.08)}
   /* prize pot + podium markers */
   .pot{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:12px 14px 12px 16px;border-bottom:1px solid var(--line);background:linear-gradient(90deg, rgba(230,184,76,.07), transparent);position:relative}
@@ -410,10 +409,10 @@
   body.england h2.section::after{content:" 🏴󠁧󠁢󠁥󠁮󠁧󠁿"}
   body.england .refresh{border-color:rgba(200,16,46,.6);color:#ffd9de}
   @media (prefers-reduced-motion: reduce){ .eng-marquee .mq,.eng-bunting i,.eng-banner .t1,.eng-banner .fl{animation:none} }
-  .lb-sec{margin:14px 0 6px;padding:9px 12px;border-radius:10px;border:1px solid var(--line);background:rgba(255,255,255,.03)}
-  .lb-sec .ls-t{font-family:'Archivo';font-weight:800;font-size:12px;letter-spacing:.1em}
-  .lb-sec .ls-n{opacity:.6;font-weight:700;margin-left:4px}
-  .lb-sec .ls-s{color:var(--muted);font-size:11px;margin-top:2px}
+  .lb-sec{margin:12px 0 4px;padding:6px 10px;border-radius:9px;border:1px solid var(--line);background:rgba(255,255,255,.03);display:flex;align-items:baseline;gap:8px;flex-wrap:wrap}
+  .lb-sec .ls-t{font-family:'Archivo';font-weight:800;font-size:11.5px;letter-spacing:.09em}
+  .lb-sec .ls-n{opacity:.6;font-weight:700;margin-left:2px}
+  .lb-sec .ls-s{color:var(--muted);font-size:10.5px}
   .lb-sec.sec0{border-color:rgba(70,190,110,.45);background:rgba(70,190,110,.06)}
   .lb-sec.sec0 .ls-t{color:#c9f0d4}
   .lb-sec.sec1{border-color:rgba(230,150,60,.45);background:rgba(230,150,60,.06)}
@@ -1712,8 +1711,8 @@ window.LEAGUE_DATA = {
       </div>`;
     }
     html += finale
-      ? `<div class="tap-hint">That's the tournament — the table below is final. Top 3: hit <b>🎬 Collect your winnings</b> on your row. Everyone can still tap their name for their full breakdown.</div>`
-      : `<div class="tap-hint">Tap your name for your full stats — points breakdown, tie-breakers, your winner &amp; top-scorer picks, and exactly how your best possible finish is worked out.</div>`;
+      ? `<div class="tap-hint">Final table. Top 3 — hit <b>🎬 Collect your winnings</b> on your row.</div>`
+      : `<div class="tap-hint">Tap a name for the full breakdown — picks, tie-breakers, and how each finish is worked out.</div>`;
 
     const anyScored = S.some(p=>p.total>0);   // pre-tournament, everyone is on 0 — show plain dashes
     // strict unique ranking — the tiebreak chain in computeStandings guarantees no two players are equal
@@ -1858,15 +1857,15 @@ window.LEAGUE_DATA = {
     };
     const whyNote = po => {
       if(!po.bestRank) return "";
-      let s = `<b>Why this is the highest you can finish:</b> with every group game played, the only points left are the winner (+${PTS.winner}) and Golden Boot (+${PTS.topScorer}) bonuses — and neither is shared, so every correct picker banks the full amount. The most you can reach is <b>${po.maxPts} pts</b> (${scenPhrase(po)}), which would place you <b>${ord(po.bestRank)}</b>.`;
+      let s = `<b>Why:</b> only the winner (+${PTS.winner}) and Golden Boot (+${PTS.topScorer}) bonuses are left, and neither is shared. Best case <b>${po.maxPts} pts</b> (${scenPhrase(po)}) = <b>${ord(po.bestRank)}</b>.`;
       if(po.bestRank===1){
-        s += ` In that scenario nobody finishes above you, so you can still win it outright.`;
+        s += ` Nobody's above you in that world — the title's still on.`;
       } else {
-        const ab=po.above||[], shown=ab.slice(0,3).map(esc).join(", "), more=ab.length>3?` and ${ab.length-3} other${ab.length-3>1?'s':''}`:``;
+        const ab=po.above||[], shown=ab.slice(0,3).map(esc).join(", "), more=ab.length>3?` +${ab.length-3} more`:``;
         const bits=[];
-        if(po.strictAbove>0) bits.push(`${po.strictAbove} would out-point you`);
-        if(po.tbAbove>0) bits.push(`${po.tbAbove} would be level on points but ahead on the tie-break (most exact scores, then closest to total goals)`);
-        s += ` Even then, ${ab.length} ${ab.length===1?"player finishes":"players finish"} above you (${shown}${more})${bits.length?` — ${bits.join(", and ")}`:``}. With no match points left to win, that gap can't be closed.`;
+        if(po.strictAbove>0) bits.push(`${po.strictAbove} on points`);
+        if(po.tbAbove>0) bits.push(`${po.tbAbove} on the tie-break`);
+        s += ` Even then ${ab.length} finish above you (${shown}${more}${bits.length?` — ${bits.join(", ")}`:``}), and no match points remain to close it.`;
       }
       return s;
     };
@@ -1885,28 +1884,36 @@ window.LEAGUE_DATA = {
       const meta=[];
       const engBacker = !!(C.themeEngland && p.winner==="England" && !p.winnerEliminated);
       if(engBacker) meta.push(`<span class="chip eng">👑 ENGLAND'S MAN 🦁🦁🦁 HE BELIEVED WHEN NOBODY ELSE DID</span>`);
+      // Won bonuses always earn a gold chip
       if(p.bootWon) meta.push(`<span class="chip alive">◆ Golden Boot (+${PTS.topScorer})</span>`);
-      else if(p.bootEliminated) meta.push(`<span class="chip">Boot pick out</span>`);
-      else if(p.bootLeading) meta.push(`<span class="chip alive">◆ Boot pick leading</span>`);
-      else if(p.bootInTable) meta.push(`<span class="chip">Boot pick scoring</span>`);
       if(p.winnerWon) meta.push(`<span class="chip alive">★ Champion (+${PTS.winner})</span>`);
-      else if(p.winnerEliminated) meta.push(`<span class="chip">Winner pick out</span>`);
-      else if(p.winnerAlive) meta.push(`<span class="chip">Winner: ${fteam(p.winner,true)}</span>`);
       if(finale && anyScored && rank<=3 && C.winningsVideo){
         meta.push(`<span class="chip winnings" onclick="event.stopPropagation();window.__winnings&&window.__winnings()">🎬 Collect your winnings</span>`);
       }
-      if(finale){ /* season over — no more can-finish/out chips, the table is the table */ }
-      else if(prizeOut[idx].out) meta.push(`<span class="chip out">✕ Out${prizeOut[idx].tiebreak?` · tie-break`:``}${prizeOut[idx].bestRank?` · best ${ord(prizeOut[idx].bestRank)}`:``}</span>`);
-      else if(prizeOut[idx].bestRank){
-        const hi=ord(prizeOut[idx].bestRank), lo=ord(prizeOut[idx].worstRank), rng=prizeOut[idx].bestRank===prizeOut[idx].worstRank?hi:`${hi}–${lo}`;
-        if(prizeOut[idx].locked) meta.push(`<span class="chip alive">✓ Guaranteed top 3 · ${rng}</span>`);
-        else{
-          meta.push(`<span class="chip best">Can finish ${rng}</span>`);
-          const rb=prizeOut[idx].rBest, rw=prizeOut[idx].rWorst;
-          if(rb && (rb!==prizeOut[idx].bestRank || rw!==prizeOut[idx].worstRank)){
-            meta.push(`<span class="chip real">Realistic ${ord(rb)}${rw>rb?`–${ord(rw)}`:``}</span>`);
+      if(!finale){
+        if(useSections){
+          // TIDY MODE: the section header already says hunt / long shot / out,
+          // so each row carries ONE finish chip. Everything else (pick status,
+          // ranges, scenarios) lives in the tap-to-expand breakdown.
+          if(prizeOut[idx].out){ if(prizeOut[idx].bestRank) meta.push(`<span class="chip">Best ${ord(prizeOut[idx].bestRank)}</span>`); }
+          else if(prizeOut[idx].locked) meta.push(`<span class="chip alive">✓ Guaranteed top 3</span>`);
+          else if(prizeOut[idx].bestRank){
+            const useR = prizeOut[idx].rBest && (prizeOut[idx].rBest!==prizeOut[idx].bestRank || prizeOut[idx].rWorst!==prizeOut[idx].worstRank);
+            const b = useR?prizeOut[idx].rBest:prizeOut[idx].bestRank, w = useR?prizeOut[idx].rWorst:prizeOut[idx].worstRank;
+            meta.push(`<span class="chip best">Finish ${ord(b)}${w>b?`–${ord(w)}`:``}</span>`);
           }
-          if(prizeOut[idx].longshot) meta.push(`<span class="chip lshot">Boot off the pace</span>`);
+        } else {
+          if(p.bootEliminated) meta.push(`<span class="chip">Boot pick out</span>`);
+          else if(p.bootLeading) meta.push(`<span class="chip alive">◆ Boot pick leading</span>`);
+          else if(p.bootInTable) meta.push(`<span class="chip">Boot pick scoring</span>`);
+          if(p.winnerEliminated) meta.push(`<span class="chip">Winner pick out</span>`);
+          else if(p.winnerAlive) meta.push(`<span class="chip">Winner: ${fteam(p.winner,true)}</span>`);
+          if(prizeOut[idx].out) meta.push(`<span class="chip out">✕ Out${prizeOut[idx].tiebreak?` · tie-break`:``}${prizeOut[idx].bestRank?` · best ${ord(prizeOut[idx].bestRank)}`:``}</span>`);
+          else if(prizeOut[idx].bestRank){
+            const hi=ord(prizeOut[idx].bestRank), lo=ord(prizeOut[idx].worstRank), rng=prizeOut[idx].bestRank===prizeOut[idx].worstRank?hi:`${hi}–${lo}`;
+            if(prizeOut[idx].locked) meta.push(`<span class="chip alive">✓ Guaranteed top 3 · ${rng}</span>`);
+            else meta.push(`<span class="chip best">Can finish ${rng}</span>`);
+          }
         }
       }
       const potential = (p.bootLeading?PTS.topScorer:0);
@@ -1965,9 +1972,8 @@ window.LEAGUE_DATA = {
           ${liveHtml}
           <div class="bd-line">Match points: <b>${p.mp}</b> from ${p.played} finished matches${gaps.length?` · ${gaps.join(" · ")}`:``}.</div>
           ${(!finale && !prizeOut[idx].out && prizeOut[idx].bestRank)?`<div class="bd-line">Highest possible finish: <b>${ord(prizeOut[idx].bestRank)} place</b> · max <b>${prizeOut[idx].maxPts} pts</b>${bestScenario(prizeOut[idx])}.</div>`:``}
-          ${(!finale && !prizeOut[idx].out && prizeOut[idx].bestRank && prizeOut[idx].rBest && (prizeOut[idx].rBest!==prizeOut[idx].bestRank||prizeOut[idx].rWorst!==prizeOut[idx].worstRank))?`<div class="bd-line">Realistic range: <b>${ord(prizeOut[idx].rBest)}${prizeOut[idx].rWorst>prizeOut[idx].rBest?`–${ord(prizeOut[idx].rWorst)}`:``} place</b> — counts only what's genuinely live: eliminated teams are out, and the Golden Boot can only go to a scorer still on the pace or someone nobody picked (off-the-pace long shots excluded for everyone).</div>`:``}
-          ${(!finale && !prizeOut[idx].out && prizeOut[idx].longshot)?`<div class="bd-line lshot-line">⚠ That top finish leans on <b>${esc(p.topScorer)}</b>'s Golden Boot — he's on <b>${prizeOut[idx].bootGoals}</b> ${prizeOut[idx].bootGoals===1?"goal":"goals"} vs <b>${prizeOut[idx].leadGoals}</b> for the leaders with the tournament nearly done. Still possible, but a long shot.</div>
-          <div class="bd-line">Realistic finish (your boot aside${prizeOut[idx].myWinner?`, ${esc(prizeOut[idx].myWinner)} winning it`:``}): <b>${ord(prizeOut[idx].realRank)}${prizeOut[idx].realWorst>prizeOut[idx].realRank?`–${ord(prizeOut[idx].realWorst)}`:``} place</b> · <b>${prizeOut[idx].realPts} pts</b> — the range covers the Golden Boot going to any scorer still on the pace (their backers bank the +60) or to someone nobody picked.</div>`:``}
+          ${(!finale && !prizeOut[idx].out && prizeOut[idx].bestRank && prizeOut[idx].rBest && (prizeOut[idx].rBest!==prizeOut[idx].bestRank||prizeOut[idx].rWorst!==prizeOut[idx].worstRank))?`<div class="bd-line">Realistic range: <b>${ord(prizeOut[idx].rBest)}${prizeOut[idx].rWorst>prizeOut[idx].rBest?`–${ord(prizeOut[idx].rWorst)}`:``} place</b> — eliminated teams and off-the-pace boot picks excluded.</div>`:``}
+          ${(!finale && !prizeOut[idx].out && prizeOut[idx].longshot)?`<div class="bd-line lshot-line">⚠ Boot long shot: <b>${esc(p.topScorer)}</b> has <b>${prizeOut[idx].bootGoals}</b> of the leaders' <b>${prizeOut[idx].leadGoals}</b> goals. Without it${prizeOut[idx].myWinner?` (${esc(prizeOut[idx].myWinner)} winning it)`:``}: <b>${ord(prizeOut[idx].realRank)}${prizeOut[idx].realWorst>prizeOut[idx].realRank?`–${ord(prizeOut[idx].realWorst)}`:``}</b> · <b>${prizeOut[idx].realPts} pts</b>.</div>`:``}
           ${(!finale && !prizeOut[idx].out && prizeOut[idx].bestRank && prizeOut[idx].worstRank!==prizeOut[idx].bestRank)?`<div class="bd-line">Lowest you could finish: <b>${ord(prizeOut[idx].worstRank)} place</b> · min <b>${prizeOut[idx].minPts} pts</b>${worstScen(prizeOut[idx])}.${prizeOut[idx].locked?` Either way you're <b>guaranteed a prize</b>.`:``}</div>`:``}
           ${(!finale && prizeOut[idx].out)?`<div class="bd-line out-line">✕ <b>Out of the prizes.</b> ${prizeOut[idx].bestRank?`Highest you can finish is <b>${ord(prizeOut[idx].bestRank)} place</b> (max <b>${prizeOut[idx].maxPts} pts</b>)${prizeOut[idx].tiebreak?` — you'd be level on points with those above but lose the tie-break (exact scores, then closeness to total goals)`:``}.`:`Best possible total is <b>${prizeOut[idx].cap}</b> pts and ${prizeOut[idx].above} players are already guaranteed above it.`}${(p.winnerEliminated||p.bootEliminated)?` Dead picks: ${[p.winnerEliminated?`winner ${esc(p.winner)}`:``,p.bootEliminated?`boot ${esc(p.topScorer)}`:``].filter(Boolean).join(", ")}.`:``}</div>`:``}
           ${(!finale && prizeOut[idx].bestRank)?`<div class="bd-line why">${whyNote(prizeOut[idx])}</div>`:``}
